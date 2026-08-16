@@ -19,9 +19,12 @@ export async function POST(request: Request) {
     const { data: catData } = await supabase.from('categories').select('id').ilike('name', category).single()
     const category_id = catData?.id
 
+    const postId = `manual-${Date.now()}`
+
     const { data, error } = await supabase
       .from('posts')
       .insert({
+        id: postId,
         title: title.trim(),
         excerpt: excerpt?.trim() || title.trim(),
         content: content.trim(),
