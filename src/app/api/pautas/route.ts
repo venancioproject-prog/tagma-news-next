@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_API_KEY = process.env.GROQ_API_KEY!
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
