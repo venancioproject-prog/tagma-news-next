@@ -154,6 +154,70 @@ export default function AdminPage() {
               Status do Cron: <span className="text-green-400 font-bold">Aguardando Deploy na Vercel</span>
             </div>
           </div>
+          {/* REDAÇÃO MANUAL */}
+          <div className="p-6 bg-white border border-gray-200 rounded md:col-span-2 mt-4 shadow-sm">
+            <h2 className="text-lg font-sans font-bold uppercase tracking-widest text-[#001c06] mb-2 border-b pb-2">
+              Redação Manual (Escrever Matéria a Mão)
+            </h2>
+            <p className="text-sm text-gray-600 mb-6 font-sans">
+              Publique diretamente no portal sem usar a Inteligência Artificial.
+            </p>
+            
+            <form className="flex flex-col gap-4 font-sans" onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const title = (form.elements.namedItem('title') as HTMLInputElement).value;
+              const excerpt = (form.elements.namedItem('excerpt') as HTMLInputElement).value;
+              const image = (form.elements.namedItem('image') as HTMLInputElement).value;
+              const content = (form.elements.namedItem('content') as HTMLTextAreaElement).value;
+              const cat = (form.elements.namedItem('category') as HTMLSelectElement).value;
+              
+              setDrafting(true);
+              try {
+                const res = await fetch('/api/draft/manual', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title, excerpt, image, content, category: cat })
+                });
+                const data = await res.json();
+                if (data.success) {
+                  alert('Matéria publicada com sucesso!');
+                  form.reset();
+                } else {
+                  alert(`Erro: ${data.error}`);
+                }
+              } catch (err) {
+                alert('Erro ao publicar matéria');
+              }
+              setDrafting(false);
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input required name="title" type="text" placeholder="Título da Matéria" className="border p-3 rounded w-full" />
+                <input required name="excerpt" type="text" placeholder="Resumo (Linha Fina)" className="border p-3 rounded w-full" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input name="image" type="url" placeholder="URL da Imagem (Opcional)" className="border p-3 rounded w-full" />
+                <select name="category" className="border p-3 rounded w-full bg-white">
+                  <option>Política</option>
+                  <option>Economia</option>
+                  <option>Internacional</option>
+                  <option>Cultura</option>
+                  <option>Esportes</option>
+                  <option>Tecnologia</option>
+                </select>
+              </div>
+              <textarea required name="content" placeholder="Texto da Matéria (Use Markdown para Formatar, ex: ## Subtítulo, **Negrito**)" className="border p-3 rounded w-full h-48 font-mono text-sm"></textarea>
+              
+              <button 
+                disabled={drafting}
+                type="submit"
+                className="bg-[#001c06] text-white font-sans font-bold uppercase tracking-widest px-6 py-4 rounded hover:bg-[#003311] disabled:opacity-50 w-full transition-all"
+              >
+                {drafting ? 'Publicando...' : 'Publicar Matéria Agora'}
+              </button>
+            </form>
+          </div>
+
         </div>
       </div>
     </div>
