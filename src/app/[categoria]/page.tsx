@@ -9,19 +9,27 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
   const { categoria } = await params
 
   // Match the category slug with the category name in the DB
-  // e.g. "politica" -> "Política", "economia" -> "Economia"
-  const catParam = categoria.toLowerCase()
+  const slugToName: Record<string, string> = {
+    'politica': 'Política',
+    'economia': 'Economia',
+    'internacional': 'Internacional',
+    'esportes': 'Esportes',
+    'cultura': 'Cultura',
+    'tecnologia': 'Tecnologia'
+  };
+  
+  const catParam = categoria.toLowerCase();
+  const categoryName = slugToName[catParam] || catParam;
   
   // Buscar a ID da categoria no banco
   const { data: catData, error: catError } = await supabase
     .from('categories')
     .select('*')
-    .ilike('name', catParam)
+    .eq('name', categoryName)
     .single()
 
   if (catError || !catData) {
-    // Tenta fallback caso haja acento ou algo do tipo
-    // Mas se não encontrar, lança 404
+    // Se a categoria não existir no banco, 404
     notFound()
   }
 
