@@ -124,7 +124,8 @@ Você é o Redator Chefe do portal Tagma News, especializado em "Hard News" de L
 - Atribuição: Ao final: "Com informações oficiais da Caixa Econômica Federal".
 
 2. REGRAS DE SEO ON-PAGE E WEBWRITING
-- Palavra-chave foco no título, primeiro parágrafo e subtítulo H2 (ex: "Resultado da ${nomeLoteria} Concurso ${concurso}").
+- OBRIGATÓRIO: O campo 'content' DEVE ser gerado estritamente em Markdown válido. Todos os subtítulos de seções DEVEM obrigatoriamente começar com '## ' (duas hashs e um espaço) antes do texto do título. NUNCA escreva subtítulos como texto puro. Cada parágrafo deve ser separado por dupla quebra de linha.
+- Palavra-chave foco no título, primeiro parágrafo e subtítulo ## (ex: "Resultado da ${nomeLoteria} Concurso ${concurso}").
 - Use marcação Markdown rigorosa para subtítulos (##) e negritos (**palavra**).
 - Parágrafos curtos (máximo 3 a 4 linhas).
 - Bullet points destacando as dezenas e os valores.
@@ -140,7 +141,7 @@ Você é o Redator Chefe do portal Tagma News, especializado em "Hard News" de L
   "slug": "resultado-${modality.caixaKey}-concurso-${concurso}",
   "meta_description": "Confira o resultado do concurso ${concurso} da ${nomeLoteria} de ${dataSorteio}. Dezenas sorteadas e valor do próximo prêmio.",
   "excerpt": "Lide jornalístico resumindo o resultado do sorteio e o valor acumulado",
-  "content": "Texto completo em Markdown com H2, listas e citações",
+  "content": "OBRIGATÓRIO: Texto completo em Markdown com subtítulos '## ', listas '-' e valores em **negrito**",
   "tags": ["${modality.caixaKey}", "loterias", "resultado", "sorteio", "economia"]
 }`
 
@@ -185,6 +186,33 @@ Gere o artigo em JSON estrito seguindo todas as regras do Redator Chefe.`
 
     const articleData = JSON.parse(contentText)
 
+    // Higienização e fallback de Markdown para garantir subtítulos com ##
+    let cleanContent = String(articleData.content || '').replace(/\\n/g, '\n').trim()
+    const lines = cleanContent.split('\n')
+    const hasHeadings = lines.some(l => l.trim().startsWith('## ') || l.trim().startsWith('### '))
+
+    if (!hasHeadings) {
+      const enhancedLines = lines.map((line, idx) => {
+        const trimmed = line.trim()
+        if (
+          idx > 0 &&
+          trimmed.length >= 4 &&
+          trimmed.length <= 80 &&
+          !trimmed.endsWith('.') &&
+          !trimmed.endsWith(',') &&
+          !trimmed.endsWith(':') &&
+          !trimmed.startsWith('-') &&
+          !trimmed.startsWith('*') &&
+          !trimmed.startsWith('#')
+        ) {
+          return `\n## ${trimmed}\n`
+        }
+        return line
+      })
+      cleanContent = enhancedLines.join('\n')
+    }
+    cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n')
+
     // 5. Save to Supabase if configured
     const supabase = getPublicSupabaseClient()
     if (supabase) {
@@ -204,7 +232,7 @@ Gere o artigo em JSON estrito seguindo todas as regras do Redator Chefe.`
         slug: articleData.slug || `resultado-${modality.caixaKey}-${concurso}`,
         meta_description: articleData.meta_description || articleData.excerpt || articleData.title,
         excerpt: articleData.excerpt,
-        content: articleData.content,
+        content: cleanContent,
         author: 'Loterias Tagma',
         published: true,
         tags: articleData.tags || ['loterias', modality.caixaKey]

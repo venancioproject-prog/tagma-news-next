@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getPublicSupabaseClient } from '@/lib/supabase/public'
 
 export async function POST(request: Request) {
@@ -69,6 +69,33 @@ export async function POST(request: Request) {
       ? slug.trim()
       : title.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
 
+    // Higienização e garantia de subtítulos Markdown (##) antes de salvar no Supabase
+    let cleanContent = String(content || '').replace(/\\n/g, '\n').trim()
+    const contentLines = cleanContent.split('\n')
+    const hasHeadings = contentLines.some(l => l.trim().startsWith('## ') || l.trim().startsWith('### '))
+
+    if (!hasHeadings) {
+      const enhancedLines = contentLines.map((line, idx) => {
+        const trimmed = line.trim()
+        if (
+          idx > 0 &&
+          trimmed.length >= 4 &&
+          trimmed.length <= 80 &&
+          !trimmed.endsWith('.') &&
+          !trimmed.endsWith(',') &&
+          !trimmed.endsWith(':') &&
+          !trimmed.startsWith('-') &&
+          !trimmed.startsWith('*') &&
+          !trimmed.startsWith('#')
+        ) {
+          return `\n## ${trimmed}\n`
+        }
+        return line
+      })
+      cleanContent = enhancedLines.join('\n')
+    }
+    cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n')
+
     const postPayload: Record<string, any> = {
       id: postId,
       title: title.trim(),
@@ -76,7 +103,7 @@ export async function POST(request: Request) {
       slug: finalSlug,
       meta_description: meta_description?.trim() || excerpt?.trim() || title.trim(),
       excerpt: excerpt?.trim() || title.trim(),
-      content: content.trim(),
+      content: cleanContent,
       image: image?.trim() || null,
       author: 'Redação Tagma',
       published: true

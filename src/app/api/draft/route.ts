@@ -30,10 +30,11 @@ Você é o Redator Chefe de um dos maiores portais de notícias do Brasil, espec
 - Atribuição: No final do texto, inclua sempre: "Com informações de ${newsSource}".
 
 2. REGRAS DE SEO ON-PAGE E WEBWRITING (PARA O GOOGLE ADSENSE)
-- Escaneabilidade: Leitores na internet não leem, eles escaneiam. Jamais crie parágrafos com mais de 3 ou 4 linhas. A cada 3 parágrafos, insira um subtítulo (H2 ou H3) instigante e descritivo. Use marcação Markdown rigorosa para subtítulos (##) e negritos (**palavra**).
-- Palavra-chave Foco: Identifique o tema principal e insira a palavra-chave no título, no primeiro parágrafo (nas primeiras 100 palavras) e em pelo menos um subtítulo H2.
+- OBRIGATÓRIO: O campo 'content' DEVE ser gerado estritamente em Markdown válido. Todos os subtítulos de seções DEVEM obrigatoriamente começar com '## ' (duas hashs e um espaço) antes do texto do título. NUNCA escreva subtítulos como texto puro. Cada parágrafo deve ser separado por dupla quebra de linha.
+- Escaneabilidade: Leitores na internet não leem, eles escaneiam. Jamais crie parágrafos com mais de 3 ou 4 linhas. A cada 3 parágrafos, insira um subtítulo (## Subtítulo) instigante e descritivo. Use marcação Markdown rigorosa para subtítulos (##) e negritos (**palavra**).
+- Palavra-chave Foco: Identifique o tema principal e insira a palavra-chave no título, no primeiro parágrafo (nas primeiras 100 palavras) e em pelo menos um subtítulo ##.
 - Semântica (LSI): Use sinônimos e termos relacionados ao longo do texto para enriquecer a semântica sem fazer "keyword stuffing".
-- Gatilhos de Retenção: Adicione bullet points (listas) em alguma parte do texto para quebrar a leitura e aumentar o tempo de permanência do usuário na página.
+- Gatilhos de Retenção: Adicione bullet points (listas com - ) em alguma parte do texto para quebrar a leitura e aumentar o tempo de permanência do usuário na página.
 
 3. O DNA ANTIDETECÇÃO (O TOM DO PORTAL TAGMA)
 - Zero Travessões/Hífens: É ESTRITAMENTE PROIBIDO o uso de travessões ou hífens (-, —, –) para separar orações. Use vírgulas, pontos ou reescreva.
@@ -51,7 +52,7 @@ Você deve retornar UNICAMENTE um JSON válido com a seguinte estrutura:
   "meta_description": "Resumo magnético para aparecer no Google, entre 130 e 150 caracteres, terminando com uma chamada para a leitura",
   "excerpt": "Lide jornalístico de 1 a 2 frases para a página inicial",
   "image_keyword": "termo de busca curto em inglês altamente visual para encontrar foto no Unsplash/Pexels (ex: brazil politics, stock market chart, grain agriculture, quantum technology)",
-  "content": "O texto completo e gigantesco da matéria, formatado estritamente em Markdown. Deve conter H2, parágrafos curtos, listas se necessário, e citações em itálico ou blockquotes",
+  "content": "OBRIGATÓRIO: O texto completo formatado estritamente em Markdown. Todo subtítulo deve ter '## ' no início. Use **negrito** e parágrafos separados por duas quebras de linha.",
   "tags": ["tag1", "tag2", "tag3"]
 }`
 
@@ -98,6 +99,38 @@ Gere o artigo completo em JSON estrito com o novo campo "image_keyword".`
       throw new Error('JSON retornado pela IA não contém os campos obrigatórios (title / content).')
     }
 
+    // Função de sanitização e fallback inteligente para garantir que subtítulos tenham sintaxe Markdown ##
+    let cleanContent = String(articleData.content).replace(/\\n/g, '\n').trim()
+
+    // Se o texto não tiver nenhum "##", aplicar fallback: detectar linhas curtas isoladas sem pontuação final ou que pareçam subtítulos e adicionar "## "
+    const lines = cleanContent.split('\n')
+    const hasMarkdownHeadings = lines.some(l => l.trim().startsWith('## ') || l.trim().startsWith('### '))
+
+    if (!hasMarkdownHeadings) {
+      const enhancedLines = lines.map((line, idx) => {
+        const trimmed = line.trim()
+        // Critério para subtítulo sem formatação: linha com 4 a 80 caracteres, sem ponto final, sem vírgula no fim, não sendo primeiro parágrafo
+        if (
+          idx > 0 &&
+          trimmed.length >= 4 &&
+          trimmed.length <= 80 &&
+          !trimmed.endsWith('.') &&
+          !trimmed.endsWith(',') &&
+          !trimmed.endsWith(':') &&
+          !trimmed.startsWith('-') &&
+          !trimmed.startsWith('*') &&
+          !trimmed.startsWith('#')
+        ) {
+          return `\n## ${trimmed}\n`
+        }
+        return line
+      })
+      cleanContent = enhancedLines.join('\n')
+    }
+
+    // Garantir espaçamento correto entre parágrafos
+    cleanContent = cleanContent.replace(/\n{3,}/g, '\n\n')
+
     const keyword = articleData.image_keyword || currentCategory.toLowerCase()
     const cleanKeyword = encodeURIComponent(keyword.trim().replace(/[^a-zA-Z0-9 ]/g, ''))
     // Sugestão de imagem dinâmica baseada na keyword retornada pela IA
@@ -113,7 +146,7 @@ Gere o artigo completo em JSON estrito com o novo campo "image_keyword".`
         excerpt: articleData.excerpt || articleData.title,
         image_keyword: articleData.image_keyword || '',
         suggested_image: suggestedImage,
-        content: articleData.content,
+        content: cleanContent,
         category: currentCategory,
         tags: Array.isArray(articleData.tags) ? articleData.tags : [currentCategory.toLowerCase()]
       }
