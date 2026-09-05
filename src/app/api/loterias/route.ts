@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getPublicSupabaseClient } from '@/lib/supabase/public'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
@@ -125,6 +125,7 @@ Você é o Redator Chefe do portal Tagma News, especializado em "Hard News" de L
 
 2. REGRAS DE SEO ON-PAGE E WEBWRITING
 - Palavra-chave foco no título, primeiro parágrafo e subtítulo H2 (ex: "Resultado da ${nomeLoteria} Concurso ${concurso}").
+- Use marcação Markdown rigorosa para subtítulos (##) e negritos (**palavra**).
 - Parágrafos curtos (máximo 3 a 4 linhas).
 - Bullet points destacando as dezenas e os valores.
 

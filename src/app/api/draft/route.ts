@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
 
@@ -30,7 +30,7 @@ Você é o Redator Chefe de um dos maiores portais de notícias do Brasil, espec
 - Atribuição: No final do texto, inclua sempre: "Com informações de ${newsSource}".
 
 2. REGRAS DE SEO ON-PAGE E WEBWRITING (PARA O GOOGLE ADSENSE)
-- Escaneabilidade: Leitores na internet não leem, eles escaneiam. Jamais crie parágrafos com mais de 3 ou 4 linhas. A cada 3 parágrafos, insira um subtítulo (H2 ou H3) instigante e descritivo.
+- Escaneabilidade: Leitores na internet não leem, eles escaneiam. Jamais crie parágrafos com mais de 3 ou 4 linhas. A cada 3 parágrafos, insira um subtítulo (H2 ou H3) instigante e descritivo. Use marcação Markdown rigorosa para subtítulos (##) e negritos (**palavra**).
 - Palavra-chave Foco: Identifique o tema principal e insira a palavra-chave no título, no primeiro parágrafo (nas primeiras 100 palavras) e em pelo menos um subtítulo H2.
 - Semântica (LSI): Use sinônimos e termos relacionados ao longo do texto para enriquecer a semântica sem fazer "keyword stuffing".
 - Gatilhos de Retenção: Adicione bullet points (listas) em alguma parte do texto para quebrar a leitura e aumentar o tempo de permanência do usuário na página.

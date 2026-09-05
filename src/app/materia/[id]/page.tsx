@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { Metadata } from 'next'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
 
@@ -239,9 +240,11 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          {/* Renderizador com @tailwindcss/typography (prose-green e estilos semânticos) */}
-          <div className="prose prose-lg prose-green max-w-none text-[#1c1b1b] leading-relaxed prose-headings:font-sans prose-headings:font-extrabold prose-headings:text-[#001c06] prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4 prose-h2:border-b prose-h2:border-gray-100 prose-h2:pb-2 prose-h3:text-xl prose-p:my-4 prose-p:leading-relaxed prose-li:my-1.5 prose-blockquote:border-l-4 prose-blockquote:border-[#003311] prose-blockquote:bg-gray-50 prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:italic">
-            <ReactMarkdown>{post.content}</ReactMarkdown>
+          {/* Renderizador com react-markdown, remarkGfm e @tailwindcss/typography */}
+          <div className="prose prose-lg prose-green max-w-none text-[#1c1b1b] leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {post.content}
+            </ReactMarkdown>
           </div>
         </main>
 
