@@ -6,47 +6,54 @@ import ReactMarkdown from 'react-markdown'
 import type { Metadata } from 'next'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
 
+export const revalidate = 60
+
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://tagmanews.vercel.app';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   let post: ArticleItem | null = null
 
-  try {
-    const supabase = getPublicSupabaseClient()
-    if (supabase) {
-      const { data } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          title,
-          excerpt,
-          content,
-          image,
-          author,
-          created_at,
-          categories (
-            name
-          )
-        `)
-        .eq('id', id)
-        .maybeSingle()
+  // Short-Circuit imediato se for mock para eliminar TTFB
+  if (id.includes('mock')) {
+    post = MOCK_POSTS.find(p => p.id === id) || null
+  } else {
+    try {
+      const supabase = getPublicSupabaseClient()
+      if (supabase) {
+        const { data } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            title,
+            excerpt,
+            content,
+            image,
+            author,
+            created_at,
+            categories (
+              name
+            )
+          `)
+          .eq('id', id)
+          .single()
 
-      if (data) {
-        post = {
-          id: data.id,
-          title: data.title,
-          excerpt: data.excerpt || '',
-          content: data.content || '',
-          image: data.image || null,
-          author: data.author || 'Redação Tagma',
-          created_at: data.created_at,
-          category_name: (data as any).categories?.name || 'Geral'
+        if (data) {
+          post = {
+            id: data.id,
+            title: data.title,
+            excerpt: data.excerpt || '',
+            content: data.content || '',
+            image: data.image || null,
+            author: data.author || 'Redação Tagma',
+            created_at: data.created_at,
+            category_name: (data as any).categories?.name || 'Geral'
+          }
         }
       }
+    } catch (e) {
+      console.error('Error generating metadata:', e)
     }
-  } catch (e) {
-    console.error('Error generating metadata:', e)
   }
 
   if (!post) {
@@ -102,93 +109,95 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
   let post: ArticleItem | null = null
   let latestPosts: ArticleItem[] = []
 
-  try {
-    const supabase = getPublicSupabaseClient()
-    if (supabase) {
-      // 1. Busca a matéria atual no Supabase
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          title,
-          excerpt,
-          content,
-          image,
-          author,
-          created_at,
-          categories (
-            name
-          )
-        `)
-        .eq('id', id)
-        .maybeSingle()
+  // 1. SHORT-CIRCUIT IMEDIATO PARA MOCK DATA (Zero latência de rede/banco)
+  if (id.includes('mock')) {
+    post = MOCK_POSTS.find(p => p.id === id) || null
+    latestPosts = MOCK_POSTS.filter(p => p.id !== id).slice(0, 5)
+  } else {
+    // 2. BUSCA NO SUPABASE COM .single() (Fail Fast)
+    try {
+      const supabase = getPublicSupabaseClient()
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            title,
+            excerpt,
+            content,
+            image,
+            author,
+            created_at,
+            categories (
+              name
+            )
+          `)
+          .eq('id', id)
+          .single()
 
-      if (data && !error) {
-        post = {
-          id: data.id,
-          title: data.title,
-          excerpt: data.excerpt || '',
-          content: data.content || '',
-          image: data.image || null,
-          author: data.author || 'Redação Tagma',
-          created_at: data.created_at,
-          category_name: (data as any).categories?.name || 'Geral'
+        if (data && !error) {
+          post = {
+            id: data.id,
+            title: data.title,
+            excerpt: data.excerpt || '',
+            content: data.content || '',
+            image: data.image || null,
+            author: data.author || 'Redação Tagma',
+            created_at: data.created_at,
+            category_name: (data as any).categories?.name || 'Geral'
+          }
+        }
+
+        // Busca as últimas matérias para a Sidebar (excluindo a atual)
+        const { data: recentData } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            title,
+            excerpt,
+            content,
+            image,
+            author,
+            created_at,
+            categories (
+              name
+            )
+          `)
+          .neq('id', id)
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        if (recentData && recentData.length > 0) {
+          latestPosts = recentData.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            excerpt: p.excerpt || '',
+            content: p.content || '',
+            image: p.image || null,
+            author: p.author || 'Redação Tagma',
+            created_at: p.created_at,
+            category_name: p.categories?.name || 'Geral'
+          }))
         }
       }
-
-      // 2. Busca as últimas matérias para a Sidebar (excluindo a atual)
-      const { data: recentData } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          title,
-          excerpt,
-          content,
-          image,
-          author,
-          created_at,
-          categories (
-            name
-          )
-        `)
-        .neq('id', id)
-        .eq('published', true)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (recentData && recentData.length > 0) {
-        latestPosts = recentData.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          excerpt: p.excerpt || '',
-          content: p.content || '',
-          image: p.image || null,
-          author: p.author || 'Redação Tagma',
-          created_at: p.created_at,
-          category_name: p.categories?.name || 'Geral'
-        }))
-      }
+    } catch (err) {
+      console.error('Erro ao buscar dados da matéria no Supabase:', err)
     }
-  } catch (err) {
-    console.error('Erro ao buscar dados da matéria no Supabase:', err)
-  }
 
-  // Se não encontrou o post no Supabase, procura no MOCK_POSTS
-  if (!post) {
-    const foundMock = MOCK_POSTS.find(p => p.id === id)
-    if (foundMock) {
-      post = foundMock
+    // Fallback de segurança caso não encontre no banco
+    if (!post) {
+      post = MOCK_POSTS.find(p => p.id === id) || null
+    }
+
+    if (latestPosts.length < 4) {
+      const mockRecents = MOCK_POSTS.filter(p => p.id !== post?.id && !latestPosts.some(lp => lp.id === p.id))
+      latestPosts = [...latestPosts, ...mockRecents].slice(0, 5)
     }
   }
 
   if (!post) {
     notFound()
-  }
-
-  // Se não tiver matérias suficientes do Supabase para a sidebar, complementa com MOCK_POSTS
-  if (latestPosts.length < 4) {
-    const mockRecents = MOCK_POSTS.filter(p => p.id !== post?.id && !latestPosts.some(lp => lp.id === p.id))
-    latestPosts = [...latestPosts, ...mockRecents].slice(0, 5)
   }
 
   return (
