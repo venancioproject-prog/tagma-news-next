@@ -1,6 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export interface RadarItem {
   id: string;
@@ -22,8 +24,9 @@ interface TrendingTopic {
 interface ManagedPost {
   id: string;
   title: string;
+  slug?: string;
   excerpt: string;
-  content: string;
+  content?: string;
   image: string | null;
   author: string;
   created_at: string;
@@ -44,60 +47,98 @@ const LOTTERIES_LIST = [
 ];
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'radar' | 'trends' | 'manual' | 'loterias' | 'posts'>('radar');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'editor' | 'radar' | 'trends' | 'posts' | 'loterias' | 'media' | 'checklist'>('dashboard');
+
+  // --- ESTADOS DO ESTÚDIO DE REDAÇÃO (WRITER STUDIO) ---
+  const [title, setTitle] = useState('');
+  const [excerpt, setExcerpt] = useState('');
+  const [content, setContent] = useState('');
+  const [category, setCategory] = useState('Política');
+  const [author, setAuthor] = useState('Redação Tagma News');
   
-  // Radar de Concorrência (RSS)
+  // Imagem & Mídia
+  const [image, setImage] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
+  const [imageCredit, setImageCredit] = useState('Agência / Divulgação');
+
+  // SEO & Metadados
+  const [seoTitle, setSeoTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+  const [tags, setTags] = useState('');
+  const [sources, setSources] = useState('');
+
+  // Modo de visualização do editor (write | preview | split)
+  const [editorMode, setEditorMode] = useState<'write' | 'preview' | 'split'>('write');
+  const [publishing, setPublishing] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+
+  // Assistente IA no Editor
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<any>(null);
+
+  // --- RADAR RSS ---
   const [radarItems, setRadarItems] = useState<RadarItem[]>([]);
   const [loadingRadar, setLoadingRadar] = useState(false);
   const [radarCategory, setRadarCategory] = useState('');
   const [draftingRadarMap, setDraftingRadarMap] = useState<Record<number, boolean>>({});
-  const [publishedRadarMap, setPublishedRadarMap] = useState<Record<number, string>>({});
 
-  // Sugestões de Pautas (IA Trends)
+  // --- TRENDS ---
   const [trends, setTrends] = useState<TrendingTopic[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
-  const [trendsCategory, setTrendsCategory] = useState('Geral');
   const [draftingTrendMap, setDraftingTrendMap] = useState<Record<number, boolean>>({});
 
-  // Redação Manual
-  const [manualTitle, setManualTitle] = useState('');
-  const [manualExcerpt, setManualExcerpt] = useState('');
-  const [manualImage, setManualImage] = useState('');
-  const [manualContent, setManualContent] = useState('');
-  const [manualCategory, setManualCategory] = useState('Política');
-  const [manualDrafting, setManualDrafting] = useState(false);
-  const [manualPublished, setManualPublished] = useState<string | null>(null);
-
-  // Loterias
+  // --- LOTERIAS ---
   const [lotteryLoadingMap, setLotteryLoadingMap] = useState<Record<string, boolean>>({});
   const [lotteryPublishedMap, setLotteryPublishedMap] = useState<Record<string, string>>({});
 
-  // Gerenciar Posts
+  // --- GERENCIAMENTO DE POSTS ---
   const [managedPosts, setManagedPosts] = useState<ManagedPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [postsSearch, setPostsSearch] = useState('');
 
-  // Modal de Apuração / Revisão da IA
-  const [reviewModalOpen, setReviewModalOpen] = useState(false);
-  const [currentDraft, setCurrentDraft] = useState<{
-    title: string;
-    seo_title?: string;
-    slug?: string;
-    meta_description?: string;
-    excerpt: string;
-    content: string;
-    category: string;
-    image?: string;
-    tags?: string[];
-    sourceIndex?: number;
-    sourceType?: 'radar' | 'trend';
-  } | null>(null);
-  const [publishingDraft, setPublishingDraft] = useState(false);
+  // Contagens e Métricas
+  const wordCount = useMemo(() => {
+    return content.trim() ? content.trim().split(/\s+/).length : 0;
+  }, [content]);
+
+  const readingTime = useMemo(() => {
+    return Math.max(1, Math.ceil(wordCount / 200));
+  }, [wordCount]);
+
+  // Auditoria em Tempo Real (Pré-Publicação)
+  const validationIssues = useMemo(() => {
+    const issues: { field: string; message: string; critical: boolean }[] = [];
+    if (!title.trim()) issues.push({ field: 'Título', message: 'Manchete obrigatória não preenchida', critical: true });
+    else if (title.length < 20) issues.push({ field: 'Título', message: 'Título curto (recomendado 30+ caracteres)', critical: false });
+    
+    if (!excerpt.trim()) issues.push({ field: 'Linha Fina', message: 'Lide/Linha fina obrigatória para a Home e Google', critical: true });
+    if (!content.trim() || wordCount < 40) issues.push({ field: 'Corpo', message: 'Texto muito curto para padrão Hard News (mín. 40 palavras)', critical: true });
+    if (!image.trim()) issues.push({ field: 'Imagem', message: 'Imagem de capa recomendada para Open Graph e Google News', critical: false });
+    if (image.trim() && !imageAlt.trim()) issues.push({ field: 'Acessibilidade', message: 'Texto alternativo (Alt) da imagem é obrigatório para WCAG 2.2', critical: true });
+    if (!author.trim()) issues.push({ field: 'Autor', message: 'Autoria individual ou institucional obrigatória', critical: true });
+
+    return issues;
+  }, [title, excerpt, content, wordCount, image, imageAlt, author]);
+
+  const isReadyToPublish = validationIssues.filter(i => i.critical).length === 0;
 
   useEffect(() => {
     fetchRadar();
     fetchTrends();
+    fetchPosts();
   }, []);
+
+  // Gerador automático de slug
+  const generateSlugFromTitle = (text: string) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
 
   const fetchRadar = async (cat = radarCategory) => {
     setLoadingRadar(true);
@@ -115,10 +156,10 @@ export default function AdminPage() {
     }
   };
 
-  const fetchTrends = async (cat = trendsCategory) => {
+  const fetchTrends = async () => {
     setLoadingTrends(true);
     try {
-      const res = await fetch(`/api/admin/trending-topics?category=${encodeURIComponent(cat)}`);
+      const res = await fetch('/api/admin/trending-topics');
       const data = await res.json();
       if (data.success && Array.isArray(data.topics)) {
         setTrends(data.topics);
@@ -145,6 +186,188 @@ export default function AdminPage() {
     }
   };
 
+  // Carregar notícia do Radar no Estúdio de Redação
+  const handleLoadRadarToStudio = async (item: RadarItem, index: number) => {
+    setDraftingRadarMap(prev => ({ ...prev, [index]: true }));
+    try {
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: item.title,
+          description: item.description,
+          category: item.category || 'Geral',
+          link: item.link,
+          source: item.source
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.draft) {
+        setTitle(data.draft.title || item.title);
+        setExcerpt(data.draft.excerpt || item.description);
+        setContent(data.draft.content || '');
+        setCategory(data.draft.category || item.category || 'Geral');
+        setSeoTitle(data.draft.seo_title || data.draft.title);
+        setSlug(data.draft.slug || generateSlugFromTitle(data.draft.title));
+        setMetaDescription(data.draft.meta_description || data.draft.excerpt);
+        setImage(data.draft.suggested_image || '');
+        setImageAlt(`Foto referente à reportagem sobre ${data.draft.title}`);
+        setSources(`Com informações de ${item.source} (${item.link})`);
+        setActiveTab('editor');
+      } else {
+        setTitle(item.title);
+        setExcerpt(item.description);
+        setCategory(item.category || 'Geral');
+        setSources(`Fonte original: ${item.source} - ${item.link}`);
+        setActiveTab('editor');
+      }
+    } catch (e) {
+      setTitle(item.title);
+      setExcerpt(item.description);
+      setCategory(item.category || 'Geral');
+      setSources(`Fonte original: ${item.source}`);
+      setActiveTab('editor');
+    } finally {
+      setDraftingRadarMap(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  // Carregar Trend no Estúdio
+  const handleLoadTrendToStudio = async (trend: TrendingTopic, index: number) => {
+    setDraftingTrendMap(prev => ({ ...prev, [index]: true }));
+    try {
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: trend.title,
+          description: `${trend.angle}. Palavras-chave: ${trend.keywords}`,
+          category: trend.category || 'Geral',
+          source: 'Sugestões do Editor (IA)'
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.draft) {
+        setTitle(data.draft.title);
+        setExcerpt(data.draft.excerpt);
+        setContent(data.draft.content);
+        setCategory(data.draft.category || trend.category || 'Geral');
+        setSeoTitle(data.draft.seo_title || data.draft.title);
+        setSlug(data.draft.slug || generateSlugFromTitle(data.draft.title));
+        setMetaDescription(data.draft.meta_description || data.draft.excerpt);
+        setImage(data.draft.suggested_image || '');
+        setImageAlt(`Reportagem sobre ${trend.title}`);
+        setTags(trend.keywords);
+        setActiveTab('editor');
+      } else {
+        setTitle(trend.title);
+        setExcerpt(trend.angle);
+        setCategory(trend.category || 'Geral');
+        setTags(trend.keywords);
+        setActiveTab('editor');
+      }
+    } catch (e) {
+      setTitle(trend.title);
+      setExcerpt(trend.angle);
+      setCategory(trend.category || 'Geral');
+      setTags(trend.keywords);
+      setActiveTab('editor');
+    } finally {
+      setDraftingTrendMap(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  // Assistência Editorial IA
+  const handleCallAiAssist = async (action: string) => {
+    setAiLoading(true);
+    setAiSuggestions(null);
+    try {
+      const res = await fetch('/api/admin/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          title,
+          excerpt,
+          content,
+          category,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setAiSuggestions(data.data);
+      } else {
+        alert(`Erro na assistência IA: ${data.error || 'Falha ao consultar modelo'}`);
+      }
+    } catch (e) {
+      alert('Erro de conexão ao acionar a IA.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Publicar Matéria Oficial
+  const handlePublishArticle = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!isReadyToPublish) {
+      alert('Por favor, corrija as pendências críticas antes de publicar.');
+      return;
+    }
+
+    setPublishing(true);
+    setSaveSuccessMessage(null);
+    try {
+      const finalSlug = slug.trim() || generateSlugFromTitle(title);
+      const res = await fetch('/api/draft/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          seo_title: seoTitle || title,
+          slug: finalSlug,
+          meta_description: metaDescription || excerpt,
+          excerpt,
+          image,
+          content,
+          category,
+          tags: tags ? tags.split(',').map(t => t.trim()) : [category.toLowerCase()],
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSaveSuccessMessage('✓ Matéria publicada com sucesso no portal!');
+        fetchPosts();
+      } else {
+        alert(`Erro ao publicar: ${data.error}`);
+      }
+    } catch (err) {
+      alert('Erro de rede ao publicar matéria.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // Apuração de Loterias Caixa
+  const generateLottery = async (loteriaKey: string, loteriaName: string) => {
+    setLotteryLoadingMap(prev => ({ ...prev, [loteriaKey]: true }));
+    try {
+      const res = await fetch(`/api/loterias?loteria=${loteriaKey}`);
+      const data = await res.json();
+      if (data.success) {
+        setLotteryPublishedMap(prev => ({ ...prev, [loteriaKey]: data.post?.title || 'Publicada' }));
+        fetchPosts();
+      } else {
+        alert(`Erro: ${data.error || 'Falha ao apurar loteria'}`);
+      }
+    } catch (e) {
+      alert('Erro na conexão com a API de Loterias.');
+    } finally {
+      setLotteryLoadingMap(prev => ({ ...prev, [loteriaKey]: false }));
+    }
+  };
+
+  // Excluir Post
   const handleDeletePost = async (id: string) => {
     if (!confirm('Deseja realmente remover esta matéria do portal?')) return;
     setDeletingPostId(id);
@@ -163,995 +386,1037 @@ export default function AdminPage() {
     }
   };
 
-  const handleRewriteRadar = async (item: RadarItem, index: number) => {
-    setDraftingRadarMap(prev => ({ ...prev, [index]: true }));
-    try {
-      const res = await fetch('/api/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: item.title,
-          description: item.description,
-          category: item.category || 'Geral',
-          link: item.link,
-          source: item.source
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.draft) {
-        setCurrentDraft({
-          title: data.draft.title,
-          seo_title: data.draft.seo_title,
-          slug: data.draft.slug,
-          meta_description: data.draft.meta_description,
-          excerpt: data.draft.excerpt,
-          content: data.draft.content,
-          category: data.draft.category || item.category || 'Geral',
-          image: data.draft.suggested_image,
-          tags: data.draft.tags || [item.category.toLowerCase()],
-          sourceIndex: index,
-          sourceType: 'radar'
-        });
-        setReviewModalOpen(true);
-      } else {
-        alert(`Erro na apuração IA: ${data.error || 'Falha ao processar fato'}`);
-      }
-    } catch (e) {
-      alert('Erro de conexão com o motor de IA.');
-    } finally {
-      setDraftingRadarMap(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const handleCreateFromTrend = async (trend: TrendingTopic, index: number) => {
-    setDraftingTrendMap(prev => ({ ...prev, [index]: true }));
-    try {
-      const res = await fetch('/api/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: trend.title,
-          description: `${trend.angle}. Palavras-chave: ${trend.keywords}`,
-          category: trend.category || 'Geral',
-          source: 'Sugestões do Editor (IA)'
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.draft) {
-        setCurrentDraft({
-          title: data.draft.title,
-          seo_title: data.draft.seo_title,
-          slug: data.draft.slug,
-          meta_description: data.draft.meta_description,
-          excerpt: data.draft.excerpt,
-          content: data.draft.content,
-          category: data.draft.category || trend.category || 'Geral',
-          image: data.draft.suggested_image,
-          tags: data.draft.tags || [trend.category.toLowerCase()],
-          sourceIndex: index,
-          sourceType: 'trend'
-        });
-        setReviewModalOpen(true);
-      } else {
-        setManualTitle(trend.title);
-        setManualExcerpt(trend.angle);
-        setManualCategory(trend.category || 'Geral');
-        setActiveTab('manual');
-      }
-    } catch (e) {
-      setManualTitle(trend.title);
-      setManualExcerpt(trend.angle);
-      setManualCategory(trend.category || 'Geral');
-      setActiveTab('manual');
-    } finally {
-      setDraftingTrendMap(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const handlePublishReviewedDraft = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentDraft) return;
-
-    setPublishingDraft(true);
-    try {
-      const res = await fetch('/api/draft/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: currentDraft.title,
-          seo_title: currentDraft.seo_title,
-          slug: currentDraft.slug,
-          meta_description: currentDraft.meta_description,
-          excerpt: currentDraft.excerpt,
-          image: currentDraft.image,
-          content: currentDraft.content,
-          category: currentDraft.category,
-          tags: currentDraft.tags
-        })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        if (currentDraft.sourceType === 'radar' && currentDraft.sourceIndex !== undefined) {
-          setPublishedRadarMap(prev => ({ ...prev, [currentDraft.sourceIndex!]: currentDraft.title }));
-        }
-        setReviewModalOpen(false);
-        setCurrentDraft(null);
-        alert('✓ Matéria apurada com SEO e publicada com sucesso no portal Tagma News!');
-      } else {
-        alert(`Erro ao publicar: ${data.error}`);
-      }
-    } catch (err) {
-      alert('Erro ao enviar matéria para publicação.');
-    } finally {
-      setPublishingDraft(false);
-    }
-  };
-
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setManualDrafting(true);
-    try {
-      const res = await fetch('/api/draft/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: manualTitle,
-          excerpt: manualExcerpt,
-          image: manualImage,
-          content: manualContent,
-          category: manualCategory
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setManualPublished(manualTitle);
-        setManualTitle('');
-        setManualExcerpt('');
-        setManualImage('');
-        setManualContent('');
-      } else {
-        alert(`Erro: ${data.error}`);
-      }
-    } catch (err) {
-      alert('Erro ao publicar matéria');
-    } finally {
-      setManualDrafting(false);
-    }
-  };
-
-  const generateLottery = async (loteriaKey: string, loteriaName: string) => {
-    setLotteryLoadingMap(prev => ({ ...prev, [loteriaKey]: true }));
-    try {
-      const res = await fetch(`/api/loterias?loteria=${loteriaKey}`);
-      const data = await res.json();
-      if (data.success) {
-        setLotteryPublishedMap(prev => ({ ...prev, [loteriaKey]: data.post?.title || 'Publicada' }));
-      } else {
-        alert(`Erro: ${data.error || 'Falha ao apurar loteria'}`);
-      }
-    } catch (e) {
-      alert('Erro na conexão com a API de Loterias.');
-    } finally {
-      setLotteryLoadingMap(prev => ({ ...prev, [loteriaKey]: false }));
-    }
+  // Inserção rápida no editor Markdown
+  const insertMarkdown = (syntax: string, placeholder = '') => {
+    setContent(prev => `${prev}\n${syntax}${placeholder}`);
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf9f8] p-4 sm:p-6 lg:p-10 font-sans">
-      <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-        
-        {/* Top Header Bar */}
-        <header className="bg-[#003311] text-white px-6 sm:px-8 py-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b-4 border-[#d8561c]">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="font-serif-title text-2xl font-normal lowercase tracking-tight text-white hover:opacity-90">
-              tagma
-            </Link>
-            <span className="h-5 w-px bg-white/20"></span>
-            <div>
-              <h1 className="text-base sm:text-lg font-extrabold uppercase tracking-widest text-white leading-none">
-                Painel do Editor & Curadoria IA
+    <div className="min-h-screen bg-[#f4f2f0] flex flex-col font-sans text-gray-900">
+      
+      {/* TOP NEWSROOM HEADER */}
+      <header className="bg-[#001c06] text-white border-b-4 border-[#d8561c] px-4 lg:px-8 py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sticky top-0 z-50 shadow-md">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="font-serif-title text-2xl font-normal lowercase tracking-tight text-white hover:opacity-90">
+            tagma
+          </Link>
+          <span className="h-5 w-px bg-white/20"></span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <h1 className="text-sm sm:text-base font-extrabold uppercase tracking-widest text-white leading-none">
+                Newsroom & Central de Produção Editorial
               </h1>
-              <p className="text-[11px] text-white/70 mt-1 font-normal">
-                Motor de Hard News RSS • Automação de Loterias • Publicação Manual
-              </p>
             </div>
+            <p className="text-[10px] text-white/60 mt-0.5 font-normal">
+              Estúdio de Redação • Radar RSS • Curadoria IA • Loterias Caixa
+            </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded text-[10px] uppercase font-bold tracking-wider text-green-300">
-              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-              API Groq Conectada
-            </span>
-            <Link 
-              href="/" 
-              className="bg-[#d8561c] hover:bg-[#934b00] text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors"
-            >
-              Ver Portal Home →
-            </Link>
-          </div>
-        </header>
-
-        {/* Barra de Navegação por Abas Limpas */}
-        <div className="bg-[#f6f3f2] px-6 sm:px-8 py-3 border-b border-gray-200 flex flex-wrap gap-2 items-center">
-          <button
-            onClick={() => setActiveTab('radar')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === 'radar'
-                ? 'bg-[#001c06] text-white shadow'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <span>📡</span>
-            <span>Radar da Concorrência (RSS)</span>
-            {radarItems.length > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${activeTab === 'radar' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                {radarItems.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('trends')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === 'trends'
-                ? 'bg-[#001c06] text-white shadow'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <span>💡</span>
-            <span>Sugestões do Editor (IA Trends)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('manual')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === 'manual'
-                ? 'bg-[#001c06] text-white shadow'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <span>✍️</span>
-            <span>Publicação Manual</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('loterias')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === 'loterias'
-                ? 'bg-[#001c06] text-white shadow'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <span>🎰</span>
-            <span>Loterias Caixa</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab('posts');
-              fetchPosts();
-            }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              activeTab === 'posts'
-                ? 'bg-[#001c06] text-white shadow'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <span>📁</span>
-            <span>Gerenciar Posts</span>
-          </button>
         </div>
 
-        {/* Conteúdo Principal do Painel */}
-        <main className="p-6 sm:p-8 bg-white min-h-[580px]">
-          
-          {/* ABA 1: RADAR DE CONCORRÊNCIA (RSS) */}
-          {activeTab === 'radar' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <button
+            onClick={() => {
+              setTitle('');
+              setExcerpt('');
+              setContent('');
+              setSaveSuccessMessage(null);
+              setActiveTab('editor');
+            }}
+            className="bg-[#d8561c] hover:bg-[#b04313] text-white text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <span>✍️</span> Nova Matéria
+          </button>
+          <Link
+            href="/"
+            target="_blank"
+            className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded transition-colors"
+          >
+            Ver Portal ↗
+          </Link>
+        </div>
+      </header>
+
+      {/* SUB-NAV TABS */}
+      <nav aria-label="Abas de Produção Editorial" className="bg-[#003311] text-white px-4 lg:px-8 border-b border-white/10 overflow-x-auto scrollbar-none flex items-center gap-1 py-1">
+        {[
+          { key: 'dashboard', label: '📊 Visão Geral' },
+          { key: 'editor', label: '✍️ Estúdio de Redação' },
+          { key: 'radar', label: `📡 Radar RSS (${radarItems.length})` },
+          { key: 'trends', label: '💡 IA Trends' },
+          { key: 'posts', label: `📁 Matérias (${managedPosts.length})` },
+          { key: 'loterias', label: '🎰 Loterias Caixa' },
+          { key: 'media', label: '🖼️ Biblioteca de Mídia' },
+          { key: 'checklist', label: '📋 Manual & Checklist' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            className={`px-3.5 py-2 text-xs font-bold uppercase tracking-wider whitespace-nowrap rounded-t transition-all ${
+              activeTab === tab.key
+                ? 'bg-[#f4f2f0] text-[#001c06] shadow-sm font-extrabold'
+                : 'text-white/70 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* MAIN CONTAINER */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        {/* 1. ABA DASHBOARD / VISÃO GERAL */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
-                    <span>📡</span> Radar de Concorrência em Tempo Real
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Monitoramento automático dos maiores portais de notícias. Clique em &quot;Reescrever com IA&quot; para gerar uma matéria exclusiva e otimizada.
-                  </p>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total de Matérias</span>
+                  <p className="text-2xl font-black text-[#001c06] mt-1">{managedPosts.length}</p>
                 </div>
+                <span className="text-2xl p-3 bg-emerald-50 rounded-lg text-[#003311]">📰</span>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <select
-                    value={radarCategory}
-                    onChange={(e) => {
-                      setRadarCategory(e.target.value);
-                      fetchRadar(e.target.value);
-                    }}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold bg-white text-gray-800 focus:outline-none focus:border-[#003311]"
-                  >
-                    <option value="">Todas as Editorias</option>
-                    <option value="Política">Política</option>
-                    <option value="Economia">Economia</option>
-                    <option value="Tecnologia">Tecnologia</option>
-                    <option value="Internacional">Internacional</option>
-                  </select>
+              <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Radar Concorrentes</span>
+                  <p className="text-2xl font-black text-[#001c06] mt-1">{radarItems.length} feeds</p>
+                </div>
+                <span className="text-2xl p-3 bg-blue-50 rounded-lg text-blue-800">📡</span>
+              </div>
 
-                  <button
-                    onClick={() => fetchRadar()}
-                    disabled={loadingRadar}
-                    className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                  >
-                    {loadingRadar ? (
-                      <>
-                        <span className="inline-block animate-spin">⟳</span>
-                        <span>Varrendo RSS...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>⟳</span>
-                        <span>Atualizar Radar</span>
-                      </>
-                    )}
+              <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pautas Sugeridas</span>
+                  <p className="text-2xl font-black text-[#001c06] mt-1">{trends.length} pautas</p>
+                </div>
+                <span className="text-2xl p-3 bg-orange-50 rounded-lg text-[#d8561c]">💡</span>
+              </div>
+
+              <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Loterias Caixa</span>
+                  <p className="text-2xl font-black text-[#001c06] mt-1">9 modalidades</p>
+                </div>
+                <span className="text-2xl p-3 bg-purple-50 rounded-lg text-purple-800">🎰</span>
+              </div>
+            </div>
+
+            {/* Quick Actions & Recent Posts Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-8 bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-4">
+                <div className="border-b border-gray-100 pb-3 flex justify-between items-center">
+                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-[#001c06]">
+                    Últimas Publicações no Portal
+                  </h2>
+                  <button onClick={fetchPosts} className="text-xs text-[#003311] font-bold hover:underline">
+                    ⟳ Recarregar
                   </button>
                 </div>
-              </div>
 
-              {loadingRadar && radarItems.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <span className="text-3xl inline-block animate-spin mb-3">📡</span>
-                  <p className="text-xs font-bold uppercase tracking-widest">Varrendo feeds da concorrência...</p>
-                </div>
-              ) : radarItems.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {radarItems.map((item, idx) => {
-                    const isDrafting = Boolean(draftingRadarMap[idx]);
-                    const publishedTitle = publishedRadarMap[idx];
-
-                    return (
-                      <div 
-                        key={idx} 
-                        className="border border-gray-200 rounded-lg p-4 bg-[#fcfcfc] hover:border-[#003311] transition-all flex flex-col justify-between shadow-sm"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200 font-mono">
-                              {item.source}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              {item.pubDate}
-                            </span>
-                          </div>
-
-                          <h3 className="text-sm font-bold text-[#001c06] leading-snug mb-2 hover:text-[#003311]">
-                            {item.title}
-                          </h3>
-
-                          {item.description && item.description !== item.title && (
-                            <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed mb-4">
-                              {item.description}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="pt-3 border-t border-gray-100">
-                          {publishedTitle ? (
-                            <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[11px] text-emerald-800 font-semibold text-center">
-                              ✓ Matéria Publicada
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              {item.link && (
-                                <a
-                                  href={item.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[11px] text-gray-500 hover:text-gray-900 underline px-2 py-1.5"
-                                >
-                                  Fonte ↗
-                                </a>
-                              )}
-                              <button
-                                disabled={isDrafting}
-                                onClick={() => handleRewriteRadar(item, idx)}
-                                className="flex-1 bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider py-2 px-3 rounded transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
-                              >
-                                {isDrafting ? (
-                                  <>
-                                    <span className="inline-block animate-spin text-emerald-300">⟳</span>
-                                    <span className="text-emerald-200 text-[11px]">Redigindo IA...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>⚡</span>
-                                    <span>Reescrever com IA</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
-                  <span className="text-3xl mb-2 block">📰</span>
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Nenhum feed capturado</h3>
-                  <p className="text-xs text-gray-500 mt-1">Clique no botão &quot;Atualizar Radar&quot; para varrer os portais.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ABA 2: SUGESTÕES DO EDITOR (IA TRENDS) */}
-          {activeTab === 'trends' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
-                <div>
-                  <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
-                    <span>💡</span> Sugestões de Pautas do Editor (IA Trends)
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Ideias e pautas de alta repercussão geradas por IA (Mixtral) com palavras-chave de SEO e ganchos jornalísticos.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <select
-                    value={trendsCategory}
-                    onChange={(e) => {
-                      setTrendsCategory(e.target.value);
-                      fetchTrends(e.target.value);
-                    }}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold bg-white text-gray-800 focus:outline-none focus:border-[#003311]"
-                  >
-                    <option value="Geral">Temas Gerais (Brasil)</option>
-                    <option value="Política">Política & Congresso</option>
-                    <option value="Economia">Economia & Mercado</option>
-                    <option value="Tecnologia">Tecnologia & IA</option>
-                  </select>
-
-                  <button
-                    onClick={() => fetchTrends()}
-                    disabled={loadingTrends}
-                    className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                  >
-                    {loadingTrends ? (
-                      <>
-                        <span className="inline-block animate-spin">⟳</span>
-                        <span>Pensando Pautas...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>✨</span>
-                        <span>Gerar Novas Sugestões</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {loadingTrends && trends.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <span className="text-3xl inline-block animate-spin mb-3">💡</span>
-                  <p className="text-xs font-bold uppercase tracking-widest">O Chefe de Redação IA está formulando 5 pautas quentes...</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {trends.map((trend, idx) => {
-                    const isDrafting = Boolean(draftingTrendMap[idx]);
-
-                    return (
-                      <div 
-                        key={idx}
-                        className="border border-gray-200 rounded-xl p-5 bg-[#fcfcfc] hover:border-[#003311] transition-all flex flex-col justify-between shadow-sm"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 bg-[#003311]/10 text-[#003311] rounded-full border border-[#003311]/20">
-                              {trend.category}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-mono">Pauta #{idx + 1}</span>
-                          </div>
-
-                          <h3 className="text-base font-extrabold text-[#001c06] leading-tight mb-3">
-                            {trend.title}
-                          </h3>
-
-                          <div className="bg-white p-3 rounded-lg border border-gray-100 text-xs text-gray-600 leading-relaxed mb-4">
-                            <strong className="text-gray-800 block text-[11px] uppercase tracking-wider font-bold mb-1">
-                              Ângulo Editorial:
-                            </strong>
-                            {trend.angle}
-                          </div>
-
-                          {trend.keywords && (
-                            <div className="flex flex-wrap gap-1.5 mb-4">
-                              {trend.keywords.split(',').map((kw, kIdx) => (
-                                <span key={kIdx} className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono">
-                                  #{kw.trim()}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          disabled={isDrafting}
-                          onClick={() => handleCreateFromTrend(trend, idx)}
-                          className="w-full bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-widest py-3 px-4 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                        >
-                          {isDrafting ? (
-                            <>
-                              <span className="inline-block animate-spin text-emerald-300">⟳</span>
-                              <span className="text-emerald-200">Redigindo Matéria...</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>✍️</span>
-                              <span>Criar Matéria com IA</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ABA 3: PUBLICAÇÃO MANUAL */}
-          {activeTab === 'manual' && (
-            <div className="max-w-4xl space-y-6">
-              <div className="border-b border-gray-200 pb-4">
-                <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
-                  <span>✍️</span> Publicação Manual (Sem IA)
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Redija e publique diretamente no banco de dados com total controle de texto, imagem e formatação Markdown.
-                </p>
-              </div>
-
-              {manualPublished && (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center justify-between">
-                  <span>✓ Matéria publicada com sucesso: <strong>{manualPublished}</strong></span>
-                  <button onClick={() => setManualPublished(null)} className="text-emerald-900 font-bold hover:underline text-[11px]">✕</button>
-                </div>
-              )}
-
-              <form onSubmit={handleManualSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Título da Matéria</label>
-                    <input 
-                      required 
-                      type="text" 
-                      value={manualTitle}
-                      onChange={e => setManualTitle(e.target.value)}
-                      placeholder="Ex: Nova regulamentação fiscal entra em vigor no país..." 
-                      className="border border-gray-300 p-3 rounded-lg w-full text-sm text-gray-900 font-bold focus:border-[#003311] focus:outline-none" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Editoria</label>
-                    <select 
-                      value={manualCategory}
-                      onChange={e => setManualCategory(e.target.value)}
-                      className="border border-gray-300 p-3 rounded-lg w-full bg-white text-sm font-semibold focus:border-[#003311] focus:outline-none" 
-                    >
-                      <option>Política</option>
-                      <option>Economia</option>
-                      <option>Tecnologia</option>
-                      <option>Internacional</option>
-                      <option>Cultura</option>
-                      <option>Esportes</option>
-                      <option>Geral</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Linha Fina / Resumo (SEO Excerpt)</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={manualExcerpt}
-                    onChange={e => setManualExcerpt(e.target.value)}
-                    placeholder="Resumo objetivo do fato em 1 a 2 frases para a Home e o Google..." 
-                    className="border border-gray-300 p-3 rounded-lg w-full text-sm focus:border-[#003311] focus:outline-none" 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">URL da Imagem de Capa (Opcional)</label>
-                  <input 
-                    type="url" 
-                    value={manualImage}
-                    onChange={e => setManualImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/photo-exemplo.jpg" 
-                    className="border border-gray-300 p-3 rounded-lg w-full text-sm focus:border-[#003311] focus:outline-none" 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Corpo da Matéria (Markdown com ## para Subtítulos e **negrito**)
-                  </label>
-                  <textarea 
-                    required 
-                    rows={12}
-                    value={manualContent}
-                    onChange={e => setManualContent(e.target.value)}
-                    placeholder="Escreva a reportagem aqui. Use ## para subtítulos e quebre linhas duplas entre parágrafos..." 
-                    className="border border-gray-300 p-3.5 rounded-lg w-full font-mono text-sm leading-relaxed focus:border-[#003311] focus:outline-none"
-                  ></textarea>
-                </div>
-
-                <button
-                  disabled={manualDrafting}
-                  type="submit"
-                  className="w-full bg-[#001c06] hover:bg-[#003311] text-white font-bold uppercase text-xs tracking-widest py-4 px-6 rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
-                >
-                  {manualDrafting ? (
-                    <>
-                      <span className="inline-block animate-spin">⟳</span>
-                      <span>Gravando no Banco de Dados...</span>
-                    </>
-                  ) : (
-                    '✓ Publicar Matéria Imediatamente no Portal'
-                  )}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* ABA 4: LOTERIAS DA CAIXA */}
-          {activeTab === 'loterias' && (
-            <div className="space-y-6">
-              <div className="border-b border-gray-200 pb-4">
-                <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
-                  <span>🎰</span> Automação de Loterias da Caixa
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Extrai o último sorteio das 9 modalidades oficiais da Caixa e redige matérias otimizadas com IA.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {LOTTERIES_LIST.map((lot) => {
-                  const isProcessing = Boolean(lotteryLoadingMap[lot.key]);
-                  const published = lotteryPublishedMap[lot.key];
-
-                  return (
-                    <div key={lot.key} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm flex flex-col justify-between hover:border-gray-400 transition-all">
+                <div className="divide-y divide-gray-100">
+                  {managedPosts.slice(0, 5).map(post => (
+                    <div key={post.id} className="py-3 flex items-center justify-between gap-4">
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${lot.badgeBg}`}>
-                            {lot.tag}
-                          </span>
-                          {published && (
-                            <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                              ✓ No Ar
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-base font-extrabold text-[#001c06] mb-1">
-                          {lot.name}
+                        <span className="text-[9px] uppercase font-bold text-[#003311] bg-gray-100 px-2 py-0.5 rounded">
+                          {post.category_name}
+                        </span>
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 mt-1">
+                          <Link href={`/materia/${post.id}`} target="_blank" className="hover:text-[#d8561c] hover:underline line-clamp-1">
+                            {post.title}
+                          </Link>
                         </h3>
-                        <p className="text-[11px] text-gray-500 mb-4">
-                          Apurar concurso recente, dezenas e estimativa de prêmio.
-                        </p>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {new Date(post.created_at).toLocaleDateString('pt-BR')} • Por {post.author}
+                        </span>
                       </div>
-
-                      <div>
-                        {published ? (
-                          <div className="text-[10px] text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200 text-center font-bold">
-                            ✓ Publicada no Portal
-                          </div>
-                        ) : (
-                          <button
-                            disabled={isProcessing}
-                            onClick={() => generateLottery(lot.key, lot.name)}
-                            className="w-full bg-[#003311] hover:bg-[#001c06] text-white text-[11px] font-bold uppercase tracking-wider py-2.5 px-3 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
-                          >
-                            {isProcessing ? (
-                              <>
-                                <span className="inline-block animate-spin text-orange-400">⟳</span>
-                                <span className="text-orange-300 font-bold">Apurando...</span>
-                              </>
-                            ) : (
-                              `Apurar ${lot.name} →`
-                            )}
-                          </button>
-                        )}
-                      </div>
+                      <Link
+                        href={`/materia/${post.id}`}
+                        target="_blank"
+                        className="px-2.5 py-1 bg-gray-100 hover:bg-[#003311] hover:text-white rounded text-[10px] font-bold uppercase transition-colors"
+                      >
+                        Ver ↗
+                      </Link>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              </div>
+
+              <div className="lg:col-span-4 bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-4">
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-[#001c06] border-b border-gray-100 pb-3">
+                  Atalhos da Redação
+                </h2>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setActiveTab('editor')}
+                    className="w-full text-left p-3 bg-[#f4f2f0] hover:bg-[#003311] hover:text-white rounded-lg transition-colors flex items-center justify-between text-xs font-bold"
+                  >
+                    <span>✍️ Abrir Estúdio de Escrita</span>
+                    <span>→</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('radar')}
+                    className="w-full text-left p-3 bg-[#f4f2f0] hover:bg-[#003311] hover:text-white rounded-lg transition-colors flex items-center justify-between text-xs font-bold"
+                  >
+                    <span>📡 Monitorar Radar RSS</span>
+                    <span>→</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('trends')}
+                    className="w-full text-left p-3 bg-[#f4f2f0] hover:bg-[#003311] hover:text-white rounded-lg transition-colors flex items-center justify-between text-xs font-bold"
+                  >
+                    <span>💡 Explorar Pautas IA</span>
+                    <span>→</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('loterias')}
+                    className="w-full text-left p-3 bg-[#f4f2f0] hover:bg-[#003311] hover:text-white rounded-lg transition-colors flex items-center justify-between text-xs font-bold"
+                  >
+                    <span>🎰 Apurar Loterias Caixa</span>
+                    <span>→</span>
+                  </button>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ABA 5: GERENCIAR POSTS */}
-          {activeTab === 'posts' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
-                <div>
-                  <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
-                    <span>📁</span> Gerenciamento de Matérias
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Visualize, acesse no portal ou remova matérias publicadas no Supabase.
-                  </p>
+        {/* 2. ABA ESTÚDIO DE REDAÇÃO (WRITER STUDIO) */}
+        {activeTab === 'editor' && (
+          <div className="space-y-4">
+            
+            {/* Top Action Bar */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4 text-xs font-mono text-gray-500">
+                <span>Palavras: <strong className="text-gray-900">{wordCount}</strong></span>
+                <span>•</span>
+                <span>Tempo de Leitura: <strong className="text-gray-900">{readingTime} min</strong></span>
+                <span>•</span>
+                <span className={`px-2 py-0.5 rounded font-bold ${isReadyToPublish ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                  {isReadyToPublish ? '✓ Pronto para Publicação' : `⚠️ ${validationIssues.filter(i => i.critical).length} Pendências`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="bg-gray-100 p-1 rounded flex text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('write')}
+                    className={`px-2.5 py-1 rounded ${editorMode === 'write' ? 'bg-white shadow-sm text-[#001c06]' : 'text-gray-600'}`}
+                  >
+                    Escrita
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('split')}
+                    className={`px-2.5 py-1 rounded hidden md:inline-block ${editorMode === 'split' ? 'bg-white shadow-sm text-[#001c06]' : 'text-gray-600'}`}
+                  >
+                    Dividido
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('preview')}
+                    className={`px-2.5 py-1 rounded ${editorMode === 'preview' ? 'bg-white shadow-sm text-[#001c06]' : 'text-gray-600'}`}
+                  >
+                    Preview
+                  </button>
                 </div>
 
                 <button
-                  onClick={fetchPosts}
-                  disabled={loadingPosts}
-                  className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  type="button"
+                  disabled={publishing}
+                  onClick={handlePublishArticle}
+                  className="bg-[#001c06] hover:bg-[#003311] text-white text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-lg transition-all shadow disabled:opacity-50 flex items-center gap-2"
                 >
-                  {loadingPosts ? 'Recarregando...' : '⟳ Recarregar Lista'}
+                  {publishing ? 'Gravando no Banco...' : '✓ Publicar no Portal'}
                 </button>
               </div>
-
-              {loadingPosts ? (
-                <div className="text-center py-16 text-gray-400">
-                  <span className="text-3xl inline-block animate-spin mb-3">📁</span>
-                  <p className="text-xs font-bold uppercase tracking-widest">Carregando matérias do banco...</p>
-                </div>
-              ) : managedPosts.length > 0 ? (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#f6f3f2] text-gray-700 uppercase font-bold text-[10px] tracking-wider border-b border-gray-200">
-                      <tr>
-                        <th className="p-3.5">Título / Manchete</th>
-                        <th className="p-3.5 hidden sm:table-cell">Editoria</th>
-                        <th className="p-3.5 hidden md:table-cell">Data</th>
-                        <th className="p-3.5 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {managedPosts.map((post) => (
-                        <tr key={post.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="p-3.5 font-bold text-[#001c06]">
-                            <Link href={`/materia/${post.id}`} target="_blank" className="hover:text-[#003311] hover:underline line-clamp-1">
-                              {post.title}
-                            </Link>
-                          </td>
-                          <td className="p-3.5 hidden sm:table-cell">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-mono text-[10px]">
-                              {post.category_name}
-                            </span>
-                          </td>
-                          <td className="p-3.5 hidden md:table-cell text-gray-500 font-mono text-[11px]">
-                            {new Date(post.created_at).toLocaleDateString('pt-BR')}
-                          </td>
-                          <td className="p-3.5 text-right space-x-2 whitespace-nowrap">
-                            <Link
-                              href={`/materia/${post.id}`}
-                              target="_blank"
-                              className="text-gray-700 hover:text-[#003311] font-bold underline text-[11px]"
-                            >
-                              Ver ↗
-                            </Link>
-                            <button
-                              disabled={deletingPostId === post.id}
-                              onClick={() => handleDeletePost(post.id)}
-                              className="text-red-600 hover:text-red-800 font-bold text-[11px] disabled:opacity-50 ml-2"
-                            >
-                              {deletingPostId === post.id ? 'Excluindo...' : 'Excluir'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
-                  <p className="text-xs text-gray-500">Nenhuma matéria encontrada no momento.</p>
-                </div>
-              )}
             </div>
-          )}
 
-        </main>
-      </div>
-
-      {/* MODAL DE APURAÇÃO E REVISÃO EDITORIAL DA IA */}
-      {reviewModalOpen && currentDraft && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-gray-200">
-            
-            {/* Modal Header */}
-            <div className="bg-[#003311] text-white px-6 py-4 flex items-center justify-between border-b-2 border-[#d8561c]">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">🔍</span>
-                <div>
-                  <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider">
-                    Apuração & Revisão Editorial
-                  </h3>
-                  <p className="text-[11px] text-white/70">
-                    Verifique os fatos apurados pela IA, faça edições e valide o texto antes de publicar.
-                  </p>
-                </div>
+            {saveSuccessMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-lg flex justify-between items-center">
+                <span>{saveSuccessMessage}</span>
+                <Link href="/" target="_blank" className="underline font-mono">
+                  Visualizar no Portal →
+                </Link>
               </div>
-              <button 
-                onClick={() => setReviewModalOpen(false)}
-                className="text-white/70 hover:text-white text-xl font-bold p-1 leading-none"
-              >
-                ✕
-              </button>
-            </div>
+            )}
 
-            {/* Modal Form */}
-            <form onSubmit={handlePublishReviewedDraft} className="p-6 overflow-y-auto space-y-4 flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Título / Manchete
-                  </label>
+            {/* Main Studio Grid: Canvas (70%) + Metadata & AI Assistant (30%) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* CANVAS DE ESCRITA (lg:col-span-8) */}
+              <div className="lg:col-span-8 bg-white p-6 sm:p-8 rounded-lg border border-gray-200 shadow-sm space-y-6">
+                
+                {/* Título & Linha Fina */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700">
+                      Manchete / Título Principal
+                    </label>
+                    <span className={`text-[10px] font-mono ${title.length > 65 ? 'text-amber-600 font-bold' : 'text-gray-400'}`}>
+                      {title.length}/65 caracteres
+                    </span>
+                  </div>
                   <input
+                    type="text"
                     required
-                    type="text"
-                    value={currentDraft.title}
-                    onChange={e => setCurrentDraft({ ...currentDraft, title: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm font-bold text-gray-900 focus:outline-none focus:border-[#003311]"
+                    value={title}
+                    onChange={e => {
+                      setTitle(e.target.value);
+                      if (!slug) setSlug(generateSlugFromTitle(e.target.value));
+                    }}
+                    placeholder="Escreva a manchete jornalística de impacto..."
+                    className="w-full text-xl sm:text-2xl font-bold font-sans text-gray-900 border-b-2 border-gray-300 focus:border-[#003311] focus:outline-none pb-2 transition-colors"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Editoria
-                  </label>
-                  <select
-                    value={currentDraft.category}
-                    onChange={e => setCurrentDraft({ ...currentDraft, category: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm font-semibold bg-white focus:outline-none focus:border-[#003311]"
-                  >
-                    <option>Política</option>
-                    <option>Economia</option>
-                    <option>Internacional</option>
-                    <option>Cultura</option>
-                    <option>Esportes</option>
-                    <option>Tecnologia</option>
-                    <option>Geral</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-3 rounded border border-gray-200">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
-                    Título SEO (Google - Máx 60 caracteres)
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                    Lide / Linha Fina (Resumo da Notícia para Home & Google)
                   </label>
-                  <input
-                    type="text"
-                    value={currentDraft.seo_title || ''}
-                    onChange={e => setCurrentDraft({ ...currentDraft, seo_title: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
+                  <textarea
+                    rows={2}
+                    value={excerpt}
+                    onChange={e => setExcerpt(e.target.value)}
+                    placeholder="Resumo do fato em 1 a 2 frases objetivas. Responda: Quem, O quê, Onde e Por quê..."
+                    className="w-full text-sm font-serif italic text-gray-700 border border-gray-200 rounded p-3 focus:border-[#003311] focus:outline-none leading-relaxed"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
-                    Slug da URL Amigável
-                  </label>
-                  <input
-                    type="text"
-                    value={currentDraft.slug || ''}
-                    onChange={e => setCurrentDraft({ ...currentDraft, slug: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs font-mono text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
-                    Meta Description (Snippet do Google - 130 a 150 caracteres)
-                  </label>
-                  <input
-                    type="text"
-                    value={currentDraft.meta_description || ''}
-                    onChange={e => setCurrentDraft({ ...currentDraft, meta_description: e.target.value })}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Linha Fina / Resumo da Matéria
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={currentDraft.excerpt}
-                  onChange={e => setCurrentDraft({ ...currentDraft, excerpt: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:border-[#003311]"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Imagem de Capa (Sugerida pela IA / Editável)
-                  </label>
-                  {currentDraft.image && (
-                    <button
-                      type="button"
-                      onClick={() => setCurrentDraft({ ...currentDraft, image: '' })}
-                      className="text-[10px] text-red-600 font-bold hover:underline"
-                    >
-                      Limpar Link
-                    </button>
-                  )}
+                {/* Toolbar de Formatação Markdown */}
+                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+                  <button type="button" onClick={() => insertMarkdown('## ', 'Subtítulo da Seção')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded font-bold" title="Subtítulo H2">
+                    H2
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('### ', 'Intertítulo')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded font-bold" title="Subtítulo H3">
+                    H3
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('**', 'texto em negrito**')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded font-bold" title="Negrito">
+                    B
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('*', 'texto em itálico*')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded italic font-bold" title="Itálico">
+                    I
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('> ', 'Citação ou aspas de autoridade')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded font-mono" title="Citação">
+                    &quot; Quote
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('- ', 'Item da lista')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded" title="Lista de marcadores">
+                    • Lista
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('[Texto do link](https://exemplo.com)')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded" title="Inserir Link">
+                    🔗 Link
+                  </button>
+                  <button type="button" onClick={() => insertMarkdown('\n---\n')} className="px-2 py-1 bg-white border border-gray-300 hover:bg-gray-100 rounded font-mono" title="Divisor horizontal">
+                    --- Linha
+                  </button>
                 </div>
-                <input
-                  type="url"
-                  placeholder="https://exemplo.com/foto.jpg"
-                  value={currentDraft.image || ''}
-                  onChange={e => setCurrentDraft({ ...currentDraft, image: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-[#003311]"
-                />
-                <p className="text-[11px] text-gray-500 mt-1">
-                  A IA preenche uma sugestão automaticamente. Você pode manter, alterar para qualquer URL ou apagar.
-                </p>
-                {currentDraft.image && (
-                  <div className="mt-2 relative w-32 h-20 bg-gray-100 rounded overflow-hidden border border-gray-200">
-                    <img
-                      src={currentDraft.image}
-                      alt="Preview da Capa"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
+
+                {/* Editor Textarea / Split / Preview */}
+                {editorMode === 'write' && (
+                  <div>
+                    <textarea
+                      rows={16}
+                      value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder="Redija a reportagem aqui. Use ## para subtítulos e separe parágrafos com duas quebras de linha..."
+                      className="w-full font-mono text-sm leading-relaxed p-4 border border-gray-300 rounded-lg focus:border-[#003311] focus:outline-none"
                     />
+                  </div>
+                )}
+
+                {editorMode === 'split' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <textarea
+                      rows={16}
+                      value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder="Markdown..."
+                      className="w-full font-mono text-xs leading-relaxed p-3 border border-gray-300 rounded-lg focus:border-[#003311] focus:outline-none"
+                    />
+                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 overflow-y-auto max-h-[400px] prose prose-sm prose-green font-serif">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {content || '*O preview da matéria aparecerá aqui em tempo real...*'}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {editorMode === 'preview' && (
+                  <div className="border border-gray-200 rounded-lg p-6 bg-[#fcf9f8] min-h-[350px] prose prose-lg prose-green max-w-none font-serif">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {content || '*Nenhum conteúdo digitado para visualização.*'}
+                    </ReactMarkdown>
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Texto Completo da Matéria (Markdown com Tipografia)
-                </label>
-                <textarea
-                  required
-                  rows={10}
-                  value={currentDraft.content}
-                  onChange={e => setCurrentDraft({ ...currentDraft, content: e.target.value })}
-                  className="w-full border border-gray-300 rounded p-3 font-mono text-sm leading-relaxed text-gray-800 focus:outline-none focus:border-[#003311]"
-                ></textarea>
+              {/* PAINEL LATERAL: METADADOS & ASSISTENTE IA (lg:col-span-4) */}
+              <div className="lg:col-span-4 space-y-4">
+                
+                {/* Accordion 1: Editoria & Autoria */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#001c06] border-b border-gray-100 pb-2">
+                    Estrutura Editorial
+                  </h3>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Editoria / Seção
+                    </label>
+                    <select
+                      value={category}
+                      onChange={e => setCategory(e.target.value)}
+                      className="w-full border border-gray-300 rounded p-2 text-xs font-bold bg-white focus:outline-none focus:border-[#003311]"
+                    >
+                      <option>Política</option>
+                      <option>Economia</option>
+                      <option>Internacional</option>
+                      <option>Tecnologia</option>
+                      <option>Esportes</option>
+                      <option>Cultura</option>
+                      <option>Geral</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Assinatura / Autor
+                    </label>
+                    <input
+                      type="text"
+                      value={author}
+                      onChange={e => setAuthor(e.target.value)}
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+                </div>
+
+                {/* Accordion 2: Imagem & Mídia (com Acessibilidade) */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#001c06] border-b border-gray-100 pb-2">
+                    Capa & Acessibilidade
+                  </h3>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      URL da Imagem (Unsplash / CDN)
+                    </label>
+                    <input
+                      type="url"
+                      value={image}
+                      onChange={e => setImage(e.target.value)}
+                      placeholder="https://images.unsplash.com/photo-..."
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block mb-1">
+                      Texto Alternativo (Alt - Obrigatório WCAG)
+                    </label>
+                    <input
+                      type="text"
+                      value={imageAlt}
+                      onChange={e => setImageAlt(e.target.value)}
+                      placeholder="Descrição clara do conteúdo visual da foto..."
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Crédito Fotográfico
+                    </label>
+                    <input
+                      type="text"
+                      value={imageCredit}
+                      onChange={e => setImageCredit(e.target.value)}
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+                </div>
+
+                {/* Accordion 3: Assistente Editorial IA */}
+                <div className="bg-[#001c06] text-white p-4 rounded-lg shadow-md space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#d8561c] flex items-center gap-1.5">
+                      <span>🤖</span> Assistente Editorial IA
+                    </h3>
+                    <span className="text-[9px] uppercase font-mono text-green-300 bg-white/10 px-1.5 py-0.5 rounded">
+                      Mixtral Ativo
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-white/70 leading-relaxed">
+                    Ferramentas contextuais para enriquecer o texto antes de publicar.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase">
+                    <button
+                      type="button"
+                      disabled={aiLoading}
+                      onClick={() => handleCallAiAssist('suggest_titles')}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors text-left"
+                    >
+                      💡 3 Títulos SEO
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiLoading}
+                      onClick={() => handleCallAiAssist('generate_excerpt')}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors text-left"
+                    >
+                      ✍️ Gerar Linha Fina
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiLoading}
+                      onClick={() => handleCallAiAssist('generate_seo')}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors text-left"
+                    >
+                      🚀 Otimizar SEO
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiLoading}
+                      onClick={() => handleCallAiAssist('editorial_audit')}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors text-left"
+                    >
+                      🔍 Auditar Apuração
+                    </button>
+                  </div>
+
+                  {aiLoading && (
+                    <div className="text-center py-4 text-xs text-orange-400 font-bold animate-pulse">
+                      Consultando modelo editorial da IA...
+                    </div>
+                  )}
+
+                  {aiSuggestions && (
+                    <div className="bg-white/10 p-3 rounded text-xs space-y-2 text-white">
+                      <span className="text-[10px] uppercase font-bold text-orange-300 block">
+                        Sugestões Retornadas:
+                      </span>
+
+                      {aiSuggestions.suggestions && (
+                        <div className="space-y-1.5">
+                          {aiSuggestions.suggestions.map((sug: string, idx: number) => (
+                            <div key={idx} className="p-2 bg-white/5 rounded flex justify-between items-center gap-2">
+                              <span className="text-xs line-clamp-2">{sug}</span>
+                              <button
+                                type="button"
+                                onClick={() => setTitle(sug)}
+                                className="text-[10px] bg-[#d8561c] px-2 py-1 rounded font-bold uppercase hover:opacity-90 flex-shrink-0"
+                              >
+                                Usar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {aiSuggestions.excerpt && (
+                        <div className="p-2 bg-white/5 rounded space-y-2">
+                          <p className="text-xs italic">{aiSuggestions.excerpt}</p>
+                          <button
+                            type="button"
+                            onClick={() => setExcerpt(aiSuggestions.excerpt)}
+                            className="text-[10px] bg-[#d8561c] px-2 py-1 rounded font-bold uppercase hover:opacity-90"
+                          >
+                            Aplicar Linha Fina
+                          </button>
+                        </div>
+                      )}
+
+                      {aiSuggestions.seo_title && (
+                        <div className="p-2 bg-white/5 rounded space-y-2">
+                          <p className="text-[11px]"><strong>SEO Title:</strong> {aiSuggestions.seo_title}</p>
+                          <p className="text-[11px]"><strong>Meta:</strong> {aiSuggestions.meta_description}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSeoTitle(aiSuggestions.seo_title);
+                              setSlug(aiSuggestions.slug);
+                              setMetaDescription(aiSuggestions.meta_description);
+                            }}
+                            className="text-[10px] bg-[#d8561c] px-2 py-1 rounded font-bold uppercase hover:opacity-90"
+                          >
+                            Aplicar Metadados SEO
+                          </button>
+                        </div>
+                      )}
+
+                      {aiSuggestions.score !== undefined && (
+                        <div className="p-2 bg-white/5 rounded space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold">Pontuação Editorial:</span>
+                            <span className="text-sm font-black text-green-400">{aiSuggestions.score}/100</span>
+                          </div>
+                          <p className="text-[11px] text-white/80">{aiSuggestions.lead_check}</p>
+                          {aiSuggestions.unanswered_questions?.length > 0 && (
+                            <div>
+                              <span className="text-[10px] font-bold text-amber-300 block">Dúvidas a apurar:</span>
+                              <ul className="list-disc pl-4 text-[10px] text-white/70">
+                                {aiSuggestions.unanswered_questions.map((q: string, i: number) => (
+                                  <li key={i}>{q}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Accordion 4: SEO & Snippet do Google */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#001c06] border-b border-gray-100 pb-2">
+                    SEO & Google Search
+                  </h3>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Título SEO (Google - máx 60 caracteres)
+                    </label>
+                    <input
+                      type="text"
+                      value={seoTitle}
+                      onChange={e => setSeoTitle(e.target.value)}
+                      placeholder={title || 'Título otimizado para o buscador...'}
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Slug da URL
+                    </label>
+                    <input
+                      type="text"
+                      value={slug}
+                      onChange={e => setSlug(e.target.value)}
+                      placeholder="url-amigavel-da-materia"
+                      className="w-full border border-gray-300 rounded p-2 text-xs font-mono focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1">
+                      Meta Description (130-150 caracteres)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={metaDescription}
+                      onChange={e => setMetaDescription(e.target.value)}
+                      placeholder="Texto exibido abaixo do título nos resultados de busca..."
+                      className="w-full border border-gray-300 rounded p-2 text-xs focus:outline-none focus:border-[#003311]"
+                    />
+                  </div>
+                </div>
+
               </div>
 
-              <div className="pt-4 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReviewModalOpen(false)}
-                  className="px-5 py-2.5 rounded border border-gray-300 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  Descartar / Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={publishingDraft}
-                  className="px-6 py-2.5 rounded bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {publishingDraft ? (
-                    <>
-                      <span className="inline-block animate-spin">⟳</span>
-                      <span>Publicando Matéria...</span>
-                    </>
-                  ) : (
-                    '✓ Confirmar Apuração & Publicar no Portal'
-                  )}
-                </button>
-              </div>
-            </form>
+            </div>
 
           </div>
-        </div>
-      )}
+        )}
 
+        {/* 3. ABA RADAR DA CONCORRÊNCIA (RSS) */}
+        {activeTab === 'radar' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+              <div>
+                <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
+                  <span>📡</span> Radar de Concorrência em Tempo Real
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Monitoramento contínuo dos maiores portais (G1, Agência Brasil, Reuters, Google News).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={radarCategory}
+                  onChange={(e) => {
+                    setRadarCategory(e.target.value);
+                    fetchRadar(e.target.value);
+                  }}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold bg-white text-gray-800 focus:outline-none focus:border-[#003311]"
+                >
+                  <option value="">Todas as Editorias</option>
+                  <option value="Política">Política</option>
+                  <option value="Economia">Economia</option>
+                  <option value="Tecnologia">Tecnologia</option>
+                  <option value="Internacional">Internacional</option>
+                </select>
+
+                <button
+                  onClick={() => fetchRadar()}
+                  disabled={loadingRadar}
+                  className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {loadingRadar ? 'Varrendo feeds...' : '⟳ Atualizar Radar'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {radarItems.map((item, idx) => {
+                const isDrafting = draftingRadarMap[idx];
+                return (
+                  <div key={item.id || idx} className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between hover:border-[#003311] transition-all">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] uppercase font-bold text-[#003311] bg-gray-100 px-2 py-0.5 rounded">
+                          {item.source} • {item.category}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {item.pubDate ? new Date(item.pubDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold text-[#001c06] leading-snug mb-2">
+                        {item.title}
+                      </h3>
+                      {item.description && (
+                        <p className="text-xs text-gray-600 line-clamp-2 font-serif leading-relaxed mb-4">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-gray-500 hover:text-[#003311] font-bold underline"
+                      >
+                        Abrir Fonte ↗
+                      </a>
+                      <button
+                        disabled={isDrafting}
+                        onClick={() => handleLoadRadarToStudio(item, idx)}
+                        className="px-3 py-1.5 bg-[#001c06] hover:bg-[#003311] text-white text-[10px] font-bold uppercase rounded tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        {isDrafting ? 'Carregando...' : '⚡ Criar Pauta no Estúdio'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 4. ABA TRENDS / SUGESTÕES DE PAUTAS */}
+        {activeTab === 'trends' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+              <div>
+                <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
+                  <span>💡</span> Sugestões de Pautas & Tendências IA
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pautas estruturadas com ângulo editorial investigativo e termos para ranqueamento orgânico.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchTrends}
+                disabled={loadingTrends}
+                className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all disabled:opacity-50"
+              >
+                {loadingTrends ? 'Gerando novas pautas...' : '⟳ Novas Sugestões'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {trends.map((trend, idx) => {
+                const isDrafting = draftingTrendMap[idx];
+                return (
+                  <div key={idx} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-between hover:border-[#003311] transition-all space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] uppercase font-bold text-[#d8561c] bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
+                          {trend.category}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                          Alta Relevância
+                        </span>
+                      </div>
+                      <h3 className="text-base font-extrabold text-[#001c06]">
+                        {trend.title}
+                      </h3>
+                      <p className="text-xs text-gray-600 font-serif leading-relaxed mt-2">
+                        <strong>Ângulo Jornalístico:</strong> {trend.angle}
+                      </p>
+                    </div>
+
+                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        Tags: {trend.keywords}
+                      </span>
+                      <button
+                        disabled={isDrafting}
+                        onClick={() => handleLoadTrendToStudio(trend, idx)}
+                        className="px-4 py-2 bg-[#d8561c] hover:bg-[#b04313] text-white text-xs font-bold uppercase rounded tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        {isDrafting ? 'Carregando...' : 'Carregar no Estúdio →'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 5. ABA GERENCIAR MATÉRIAS */}
+        {activeTab === 'posts' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+              <div>
+                <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
+                  <span>📁</span> Matérias Publicadas & Arquivo
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Gerencie todas as reportagens cadastradas no banco de dados.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="search"
+                  value={postsSearch}
+                  onChange={e => setPostsSearch(e.target.value)}
+                  placeholder="Filtrar por título..."
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:border-[#003311]"
+                />
+                <button
+                  onClick={fetchPosts}
+                  disabled={loadingPosts}
+                  className="bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                >
+                  {loadingPosts ? '...' : '⟳'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#f6f3f2] text-gray-700 uppercase font-bold text-[10px] tracking-wider border-b border-gray-200">
+                  <tr>
+                    <th className="p-3.5">Título / Manchete</th>
+                    <th className="p-3.5 hidden sm:table-cell">Editoria</th>
+                    <th className="p-3.5 hidden md:table-cell">Data</th>
+                    <th className="p-3.5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {managedPosts
+                    .filter(p => !postsSearch || p.title.toLowerCase().includes(postsSearch.toLowerCase()))
+                    .map(post => (
+                      <tr key={post.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-3.5 font-bold text-[#001c06]">
+                          <Link href={`/materia/${post.id}`} target="_blank" className="hover:text-[#003311] hover:underline line-clamp-1">
+                            {post.title}
+                          </Link>
+                        </td>
+                        <td className="p-3.5 hidden sm:table-cell">
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-mono text-[10px]">
+                            {post.category_name}
+                          </span>
+                        </td>
+                        <td className="p-3.5 hidden md:table-cell text-gray-500 font-mono text-[11px]">
+                          {new Date(post.created_at).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="p-3.5 text-right space-x-2 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTitle(post.title);
+                              setExcerpt(post.excerpt);
+                              setContent(post.content || '');
+                              setCategory(post.category_name);
+                              setImage(post.image || '');
+                              setActiveTab('editor');
+                            }}
+                            className="text-[#003311] hover:underline font-bold text-[11px]"
+                          >
+                            Editar no Estúdio
+                          </button>
+                          <Link
+                            href={`/materia/${post.id}`}
+                            target="_blank"
+                            className="text-gray-700 hover:text-[#003311] font-bold underline text-[11px] ml-2"
+                          >
+                            Ver ↗
+                          </Link>
+                          <button
+                            disabled={deletingPostId === post.id}
+                            onClick={() => handleDeletePost(post.id)}
+                            className="text-red-600 hover:text-red-800 font-bold text-[11px] disabled:opacity-50 ml-2"
+                          >
+                            {deletingPostId === post.id ? 'Excluindo...' : 'Excluir'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 6. ABA LOTERIAS CAIXA */}
+        {activeTab === 'loterias' && (
+          <div className="space-y-6">
+            <div className="border-b border-gray-200 pb-4">
+              <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
+                <span>🎰</span> Automação de Loterias da Caixa
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Extrai o último sorteio das 9 modalidades oficiais da Caixa e redige matérias otimizadas para SEO.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {LOTTERIES_LIST.map((lot) => {
+                const isProcessing = Boolean(lotteryLoadingMap[lot.key]);
+                const published = lotteryPublishedMap[lot.key];
+
+                return (
+                  <div key={lot.key} className="border border-gray-200 rounded-lg p-5 bg-white shadow-sm flex flex-col justify-between hover:border-gray-400 transition-all">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${lot.badgeBg}`}>
+                          {lot.tag}
+                        </span>
+                        {published && (
+                          <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            ✓ No Ar
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base font-extrabold text-[#001c06] mb-1">
+                        {lot.name}
+                      </h3>
+                      <p className="text-[11px] text-gray-500 mb-4">
+                        Apurar concurso recente, dezenas sorteadas e estimativa de prêmio.
+                      </p>
+                    </div>
+
+                    <div>
+                      <button
+                        disabled={isProcessing}
+                        onClick={() => generateLottery(lot.key, lot.name)}
+                        className="w-full bg-[#003311] hover:bg-[#001c06] text-white text-[11px] font-bold uppercase tracking-wider py-2.5 px-3 rounded-lg transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
+                      >
+                        {isProcessing ? 'Apurando...' : `Apurar ${lot.name} →`}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 7. ABA BIBLIOTECA DE MÍDIA */}
+        {activeTab === 'media' && (
+          <div className="space-y-6">
+            <div className="border-b border-gray-200 pb-4">
+              <h2 className="text-xl font-extrabold uppercase tracking-tight text-[#001c06] flex items-center gap-2">
+                <span>🖼️</span> Biblioteca de Mídia & Validador de Imagens
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Guia de licenciamento, proporções (16:9 / 1200x630) e conformidade de acessibilidade (Alt obrigatório).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-4">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#001c06]">
+                  Testar e Validar URL de Imagem
+                </h3>
+                <input
+                  type="url"
+                  placeholder="Cole aqui o link direto da imagem (jpg, png, webp)..."
+                  className="w-full border border-gray-300 rounded p-2.5 text-xs focus:outline-none focus:border-[#003311]"
+                  onChange={e => setImage(e.target.value)}
+                  value={image}
+                />
+                {image && (
+                  <div className="relative aspect-video bg-gray-100 rounded overflow-hidden border border-gray-200">
+                    <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('editor');
+                  }}
+                  className="px-4 py-2 bg-[#001c06] text-white text-xs font-bold uppercase rounded"
+                >
+                  Usar esta imagem no Estúdio de Redação →
+                </button>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#001c06]">
+                  Diretrizes de Qualidade Fotográfica
+                </h3>
+                <ul className="list-disc pl-5 text-xs text-gray-600 space-y-2 leading-relaxed font-serif">
+                  <li><strong>Proporção Padrão:</strong> 16:9 horizontal (1200 × 675 px mínimo) para Open Graph e Google Discover.</li>
+                  <li><strong>Texto Alternativo (Alt):</strong> Obrigatório. Descreva a cena factual sem adjetivos subjetivos.</li>
+                  <li><strong>Licenciamento:</strong> Use apenas acervos autorizados (Unsplash, Agência Brasil, Pexels ou fotos próprias).</li>
+                  <li><strong>Créditos:</strong> Sempre registre o nome do fotógrafo ou agência responsável.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 8. ABA MANUAL & CHECKLIST */}
+        {activeTab === 'checklist' && (
+          <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm space-y-6 max-w-4xl">
+            <div className="border-b-2 border-[#003311] pb-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#d8561c]">
+                Governança Editorial
+              </span>
+              <h2 className="text-2xl font-black text-[#001c06] mt-1">
+                Manual de Redação & Leis de Ouro Hard News
+              </h2>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm text-gray-700 leading-relaxed font-serif">
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="font-bold font-sans text-sm text-[#001c06] mb-1">1. Regra da Pirâmide Invertida</h3>
+                <p>O primeiro parágrafo (Lide) DEVE responder: Quem, O quê, Onde, Quando, Como e Por quê. A informação mais importante nunca deve ser escondida no meio do texto.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="font-bold font-sans text-sm text-[#001c06] mb-1">2. Zero Travessões & Clichês de IA</h3>
+                <p>É estritamente proibido o uso de travessões (—) para separar orações. Evite termos robóticos como &quot;Além disso&quot;, &quot;Crucial&quot;, &quot;Em suma&quot; e &quot;Mergulhe&quot;.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="font-bold font-sans text-sm text-[#001c06] mb-1">3. Escaneabilidade Obrigatória</h3>
+                <p>Nenhum parágrafo deve ter mais de 4 linhas. A cada 3 parágrafos, insira um subtítulo com marcação markdown (## ) e use listas (-) para destacar dados numéricos.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="font-bold font-sans text-sm text-[#001c06] mb-1">4. Atribuição de Fontes</h3>
+                <p>Toda notícia deve citar a fonte primária dos fatos no corpo e conter a frase final &quot;Com informações de [Fonte]&quot;.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
-
-

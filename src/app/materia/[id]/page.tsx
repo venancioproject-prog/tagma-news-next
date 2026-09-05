@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Metadata } from 'next';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import AdSlot from '@/components/AdSlot';
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data';
 
 export const revalidate = 60;
@@ -46,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
             excerpt: data.excerpt || '',
             content: data.content || '',
             image: data.image || null,
-            author: data.author || 'Redação Tagma',
+            author: data.author || 'Redação Tagma News',
             created_at: data.created_at,
             category_name: (data as any).categories?.name || 'Geral',
           };
@@ -115,7 +116,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
 
   if (id.includes('mock')) {
     post = MOCK_POSTS.find((p) => p.id === id) || null;
-    relatedPosts = MOCK_POSTS.filter((p) => p.id !== id).slice(0, 4);
+    relatedPosts = MOCK_POSTS.filter((p) => p.id !== id).slice(0, 5);
   } else {
     try {
       const supabase = getPublicSupabaseClient();
@@ -144,7 +145,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             excerpt: data.excerpt || '',
             content: data.content || '',
             image: data.image || null,
-            author: data.author || 'Redação Tagma',
+            author: data.author || 'Redação Tagma News',
             created_at: data.created_at,
             category_name: (data as any).categories?.name || 'Geral',
           };
@@ -167,7 +168,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
           .neq('id', id)
           .eq('published', true)
           .order('created_at', { ascending: false })
-          .limit(4);
+          .limit(5);
 
         if (recentData && recentData.length > 0) {
           relatedPosts = recentData.map((p: any) => ({
@@ -176,7 +177,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             excerpt: p.excerpt || '',
             content: p.content || '',
             image: p.image || null,
-            author: p.author || 'Redação Tagma',
+            author: p.author || 'Redação Tagma News',
             created_at: p.created_at,
             category_name: p.categories?.name || 'Geral',
           }));
@@ -192,7 +193,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
 
     if (relatedPosts.length < 3) {
       const mockRecents = MOCK_POSTS.filter((p) => p.id !== post?.id && !relatedPosts.some((lp) => lp.id === p.id));
-      relatedPosts = [...relatedPosts, ...mockRecents].slice(0, 4);
+      relatedPosts = [...relatedPosts, ...mockRecents].slice(0, 5);
     }
   }
 
@@ -203,7 +204,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
   const postUrl = `${siteUrl}/materia/${post.id}`;
   const postImage = post.image || `${siteUrl}/og-image.png`;
 
-  // JSON-LD Schema for NewsArticle (WCAG & SEO compliant)
+  // JSON-LD NewsArticle
   const newsArticleJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
@@ -251,7 +252,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start mt-4">
         
         {/* Main Article Body */}
-        <main className="lg:col-span-8 bg-white p-6 sm:p-10 rounded-lg border border-gray-100 shadow-sm">
+        <main className="lg:col-span-8 bg-white p-6 sm:p-10 rounded-xl border border-gray-200 shadow-sm">
           
           {/* Header & Meta */}
           <header className="mb-6">
@@ -276,17 +277,22 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             )}
 
             <div className="text-xs font-sans uppercase tracking-wider text-gray-500 py-3 border-y border-gray-100 flex flex-wrap items-center justify-between gap-2">
-              <span>Por <strong>{post.author}</strong></span>
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#003311] text-white flex items-center justify-center font-bold text-[10px]">
+                  TN
+                </span>
+                <span>Por <strong>{post.author}</strong></span>
+              </div>
               <div className="flex items-center gap-2 text-[11px] text-gray-400 font-mono">
                 <span>Publicado em: {new Date(post.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
               </div>
             </div>
           </header>
 
-          {/* Featured Image */}
+          {/* Featured Image with Caption & Credit */}
           {post.image && (
             <figure className="mb-8">
-              <div className="relative w-full aspect-video overflow-hidden bg-gray-100 rounded shadow-sm">
+              <div className="relative w-full aspect-video overflow-hidden bg-gray-100 rounded-lg shadow-sm border border-gray-200">
                 <Image
                   src={post.image}
                   alt={post.title}
@@ -297,8 +303,8 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                 />
               </div>
               <figcaption className="text-[11px] text-gray-500 font-sans mt-2 italic flex justify-between">
-                <span>Registro fotográfico referente à pauta reportada.</span>
-                <span className="font-bold text-gray-400">Foto: Agência / Divulgação</span>
+                <span>Registro referente aos fatos apurados pela redação.</span>
+                <span className="font-bold text-gray-400">Crédito: Agência / Divulgação</span>
               </figcaption>
             </figure>
           )}
@@ -338,31 +344,31 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             </ReactMarkdown>
           </div>
 
-          {/* Transparência, Fontes e Histórico de Correção (Princípio P1) */}
+          {/* Transparência & Fontes */}
           <section className="mt-10 pt-6 border-t border-gray-200 bg-gray-50 p-5 rounded-lg font-sans text-xs text-gray-600 space-y-3">
             <h3 className="font-bold uppercase tracking-wider text-[#001c06] flex items-center gap-1.5">
-              <span>🔍</span> Transparência Editorial & Fontes
+              <span>🔍</span> Transparência Editorial & Fontes Primárias
             </h3>
             <p className="leading-relaxed">
-              Esta reportagem segue as diretrizes do Manual de Redação do Tagma News. A apuração baseou-se em comunicados institucionais, fontes primárias e dados públicos verificados.
+              Esta reportagem foi elaborada de acordo com as normas do Manual de Redação do Tagma News. A equipe baseou-se em notas institucionais, fontes primárias e dados de domínio público checados.
             </p>
             <div className="pt-2 border-t border-gray-200 flex flex-wrap items-center justify-between text-[11px] text-gray-400">
-              <span>Status: Versão Canônica Verificada</span>
+              <span>Status: Versão Canônica Homologada</span>
               <Link href="/sobre" className="text-[#003311] font-bold hover:underline">
-                Conheça nossa Política Editorial →
+                Nossos Princípios Editoriais →
               </Link>
             </div>
           </section>
 
-          {/* Botões de Compartilhamento Acessíveis */}
+          {/* Compartilhamento Social Acessível */}
           <div className="mt-8 pt-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4 font-sans text-xs">
-            <span className="font-bold text-gray-700 uppercase tracking-wider">Compartilhar:</span>
+            <span className="font-bold text-gray-700 uppercase tracking-wider">Compartilhe esta matéria:</span>
             <div className="flex gap-2">
               <a
                 href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`${post.title} - ${postUrl}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-colors"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-colors flex items-center gap-1.5"
                 aria-label="Compartilhar no WhatsApp"
               >
                 WhatsApp
@@ -371,8 +377,8 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                 href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(postUrl)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold transition-colors"
-                aria-label="Compartilhar no Twitter / X"
+                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold transition-colors flex items-center gap-1.5"
+                aria-label="Compartilhar no Twitter"
               >
                 X (Twitter)
               </a>
@@ -380,7 +386,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                 href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(postUrl)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-blue-800 hover:bg-blue-900 text-white rounded font-bold transition-colors"
+                className="px-3.5 py-2 bg-blue-800 hover:bg-blue-900 text-white rounded font-bold transition-colors flex items-center gap-1.5"
                 aria-label="Compartilhar no LinkedIn"
               >
                 LinkedIn
@@ -389,13 +395,14 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
           </div>
         </main>
 
-        {/* Sidebar de Recirculação & Matérias Relacionadas */}
+        {/* Sidebar de Recirculação & Anúncio */}
         <aside className="lg:col-span-4 space-y-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+          
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <div className="border-b-2 border-[#003311] pb-2 mb-4 flex items-center justify-between">
               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#001c06] font-sans flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#d8561c]"></span>
-                Matérias Relacionadas
+                Mais Lidas da Editoria
               </h2>
             </div>
 
@@ -421,7 +428,7 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                       <h3 className="text-xs sm:text-sm font-sans font-bold leading-snug text-gray-900 group-hover:text-[#d8561c] transition-colors line-clamp-2">
                         {item.title}
                       </h3>
-                      <span className="text-[10px] text-gray-400 font-sans mt-1 block">
+                      <span className="text-[10px] text-gray-400 font-mono mt-1 block">
                         {new Date(item.created_at).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
@@ -435,10 +442,13 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                 href="/ultimas"
                 className="inline-block w-full py-2.5 px-4 bg-[#f6f3f2] hover:bg-[#003311] hover:text-white text-gray-800 text-[11px] font-sans font-bold uppercase tracking-wider rounded transition-colors text-center"
               >
-                Ver Todas as Últimas Notícias →
+                Ver Todas as Notícias →
               </Link>
             </div>
           </div>
+
+          <AdSlot format="medium-rectangle" />
+
         </aside>
 
       </div>
