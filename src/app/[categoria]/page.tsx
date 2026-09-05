@@ -9,6 +9,13 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
   const { categoria } = await params
 
   // Match the category slug with the category name in the DB
+  const normalizeSlug = (str: string) =>
+    str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '')
+
   const slugToName: Record<string, string> = {
     'politica': 'Política',
     'economia': 'Economia',
@@ -18,15 +25,17 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
     'tecnologia': 'Tecnologia'
   };
   
-  const catParam = categoria.toLowerCase();
-  const categoryName = slugToName[catParam] || catParam;
+  const decodedCat = decodeURIComponent(categoria)
+  const normalizedKey = normalizeSlug(decodedCat)
+  const categoryName = slugToName[normalizedKey] || decodedCat;
   
   // Buscar a ID da categoria no banco
   const { data: catData, error: catError } = await supabase
     .from('categories')
     .select('*')
-    .eq('name', categoryName)
+    .ilike('name', categoryName)
     .single()
+
 
   if (catError || !catData) {
     // Se a categoria não existir no banco, 404
