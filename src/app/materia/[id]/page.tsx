@@ -3,7 +3,99 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
+import type { Metadata } from 'next'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://tagmanews.vercel.app';
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  let post: ArticleItem | null = null
+
+  try {
+    const supabase = getPublicSupabaseClient()
+    if (supabase) {
+      const { data } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          excerpt,
+          content,
+          image,
+          author,
+          created_at,
+          categories (
+            name
+          )
+        `)
+        .eq('id', id)
+        .maybeSingle()
+
+      if (data) {
+        post = {
+          id: data.id,
+          title: data.title,
+          excerpt: data.excerpt || '',
+          content: data.content || '',
+          image: data.image || null,
+          author: data.author || 'Redação Tagma',
+          created_at: data.created_at,
+          category_name: (data as any).categories?.name || 'Geral'
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error generating metadata:', e)
+  }
+
+  if (!post) {
+    post = MOCK_POSTS.find(p => p.id === id) || null
+  }
+
+  if (!post) {
+    return {
+      title: 'Matéria não encontrada | Tagma News',
+      description: 'A notícia solicitada não foi encontrada.'
+    }
+  }
+
+  const cleanExcerpt = post.excerpt || post.title
+  const postUrl = `${siteUrl}/materia/${post.id}`
+  const postImage = post.image || `${siteUrl}/og-image.png`
+
+  return {
+    title: post.title,
+    description: cleanExcerpt,
+    authors: [{ name: post.author }],
+    category: post.category_name,
+    openGraph: {
+      title: post.title,
+      description: cleanExcerpt,
+      url: postUrl,
+      siteName: 'Tagma News',
+      type: 'article',
+      publishedTime: post.created_at,
+      authors: [post.author],
+      section: post.category_name,
+      images: [
+        {
+          url: postImage,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        }
+      ]
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: cleanExcerpt,
+      images: [postImage],
+      creator: '@tagmanews'
+    }
+  }
+}
 
 export default async function MateriaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

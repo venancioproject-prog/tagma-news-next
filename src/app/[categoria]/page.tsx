@@ -58,6 +58,7 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
           .eq('category_id', catData.id)
           .eq('published', true)
           .order('created_at', { ascending: false })
+          .limit(15)
 
         if (posts && posts.length > 0) {
           articles = posts.map((p: any) => ({

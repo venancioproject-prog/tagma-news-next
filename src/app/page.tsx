@@ -28,6 +28,7 @@ export default async function Home() {
         `)
         .eq('published', true)
         .order('created_at', { ascending: false })
+        .limit(15)
 
       if (error) {
         console.warn('Supabase fetch error, fallback to mock data:', error.message)
