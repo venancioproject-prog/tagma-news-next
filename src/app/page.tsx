@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 
-export const revalidate = 60 // Revalidate every minute
+export const revalidate = 0 // Disable static cache to immediately show new articles
 
 export default async function Home() {
   const supabase = await createClient()
