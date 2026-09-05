@@ -4,7 +4,17 @@ import { getPublicSupabaseClient } from '@/lib/supabase/public'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { title, excerpt, image, content, category, tags } = body
+    const { 
+      title, 
+      seo_title, 
+      slug, 
+      meta_description, 
+      excerpt, 
+      image, 
+      content, 
+      category, 
+      tags 
+    } = body
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'O título da matéria é obrigatório.' }, { status: 400 })
@@ -55,10 +65,16 @@ export async function POST(request: Request) {
     }
 
     const postId = `post-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    const finalSlug = (slug && slug.trim())
+      ? slug.trim()
+      : title.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
 
     const postPayload: Record<string, any> = {
       id: postId,
       title: title.trim(),
+      seo_title: seo_title?.trim() || title.trim(),
+      slug: finalSlug,
+      meta_description: meta_description?.trim() || excerpt?.trim() || title.trim(),
       excerpt: excerpt?.trim() || title.trim(),
       content: content.trim(),
       image: image?.trim() || null,
@@ -74,21 +90,42 @@ export async function POST(request: Request) {
       postPayload.tags = tags
     }
 
-    // 2. Executar INSERT com tratamento de erro e status 500 estruturado
-    const { data, error } = await supabase
+    // 2. Executar INSERT com fallback caso as colunas extras de SEO ainda não existam no schema
+    let insertResult = await supabase
       .from('posts')
       .insert(postPayload)
       .select()
       .single()
 
-    if (error) {
-      console.error('[ERRO INSERT SUPABASE]:', error)
+    // Se o banco rejeitar por falta das colunas seo_title/slug/meta_description, faz o fallback seguro
+    if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.details?.includes('column'))) {
+      console.warn('[SUPABASE SCHEMA FALLBACK] Tentando insert com campos padrão...')
+      const safePayload = {
+        id: postId,
+        title: title.trim(),
+        excerpt: excerpt?.trim() || title.trim(),
+        content: content.trim(),
+        image: image?.trim() || null,
+        category_id: category_id || undefined,
+        author: 'Redação Tagma',
+        published: true,
+        tags: Array.isArray(tags) ? tags : undefined
+      }
+      insertResult = await supabase
+        .from('posts')
+        .insert(safePayload)
+        .select()
+        .single()
+    }
+
+    if (insertResult.error) {
+      console.error('[ERRO INSERT SUPABASE]:', insertResult.error)
       return NextResponse.json({ 
-        error: `Rejeição do banco Supabase: ${error.message || error.details || 'Falha ao gravar registro'}` 
+        error: `Rejeição do banco Supabase: ${insertResult.error.message || insertResult.error.details || 'Falha ao gravar registro'}` 
       }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, post: data })
+    return NextResponse.json({ success: true, post: insertResult.data })
 
   } catch (err: any) {
     console.error('[ERRO FATAL API MANUAL DRAFT]:', err)

@@ -36,6 +36,9 @@ export default function AdminPage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<{
     title: string;
+    seo_title?: string;
+    slug?: string;
+    meta_description?: string;
     excerpt: string;
     content: string;
     category: string;
@@ -77,6 +80,9 @@ export default function AdminPage() {
       if (data.success && data.draft) {
         setCurrentDraft({
           title: data.draft.title,
+          seo_title: data.draft.seo_title,
+          slug: data.draft.slug,
+          meta_description: data.draft.meta_description,
           excerpt: data.draft.excerpt,
           content: data.draft.content,
           category: data.draft.category || category,
@@ -106,6 +112,9 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: currentDraft.title,
+          seo_title: currentDraft.seo_title,
+          slug: currentDraft.slug,
+          meta_description: currentDraft.meta_description,
           excerpt: currentDraft.excerpt,
           image: currentDraft.image,
           content: currentDraft.content,
@@ -121,7 +130,7 @@ export default function AdminPage() {
         }
         setReviewModalOpen(false);
         setCurrentDraft(null);
-        alert('✓ Matéria apurada e publicada com sucesso no portal!');
+        alert('✓ Matéria com SEO Técnico apurada e publicada com sucesso no portal!');
       } else {
         alert(`Erro ao publicar: ${data.error}`);
       }
@@ -628,6 +637,42 @@ export default function AdminPage() {
                     <option>Tecnologia</option>
                     <option>Geral</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-3 rounded border border-gray-200">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                    Título SEO (Google - Máx 60 caracteres)
+                  </label>
+                  <input
+                    type="text"
+                    value={currentDraft.seo_title || ''}
+                    onChange={e => setCurrentDraft({ ...currentDraft, seo_title: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                    Slug da URL Amigável
+                  </label>
+                  <input
+                    type="text"
+                    value={currentDraft.slug || ''}
+                    onChange={e => setCurrentDraft({ ...currentDraft, slug: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs font-mono text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                    Meta Description (Snippet do Google - 130 a 150 caracteres)
+                  </label>
+                  <input
+                    type="text"
+                    value={currentDraft.meta_description || ''}
+                    onChange={e => setCurrentDraft({ ...currentDraft, meta_description: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#003311]"
+                  />
                 </div>
               </div>
 

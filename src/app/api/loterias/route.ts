@@ -1,9 +1,7 @@
 ﻿import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getPublicSupabaseClient } from '@/lib/supabase/public'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 export const LOTTERY_MODALITIES: Record<string, { name: string; caixaKey: string; fallbackKey: string }> = {
   'megasena': { name: 'Mega-Sena', caixaKey: 'megasena', fallbackKey: 'megasena' },
@@ -115,16 +113,35 @@ export async function GET(request: Request) {
       ? `R$ ${dataCaixa.valorEstimadoProximoConcurso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       : `R$ ${dataCaixa.valorEstimadoProximoConcurso}`
 
-    // 4. Format with Groq AI with strict response_format json_object
-    const systemPrompt = `Você é um jornalista econômico e investigativo especializado em loterias da Caixa Econômica Federal.
-Escreva uma reportagem HARD NEWS sobre o resultado oficial.
+    // 4. Format with Groq AI with Mega System Prompt
+    const systemPrompt = `O SEU PAPEL
+Você é o Redator Chefe do portal Tagma News, especializado em "Hard News" de Loterias e Economia Popular, e mestre em SEO Técnico. Seu trabalho é transformar os dados do sorteio em uma notícia profunda, magnética e de leitura agradável.
 
-REGRAS RÍGIDAS:
-1. NÃO USE TRAVESSÕES (— ou -) para separar frases.
-2. Seja objetivo, factual e direto.
-3. Cite os números sorteados com clareza.
-4. Finalize citando a Caixa Econômica Federal como fonte oficial.
-5. Retorne ESTRITAMENTE um JSON válido.`
+1. REGRAS DE ESTRUTURA JORNALÍSTICA
+- Pirâmide Invertida: Dezenas sorteadas, concurso e estimativa de prêmio no Lide (primeiro parágrafo).
+- Contexto e Premiação: Detalhar se acumulou, regras para resgate do prêmio na Caixa e prazos (90 dias).
+- Desdobramentos: Data do próximo concurso e como apostar online ou nas lotéricas.
+- Atribuição: Ao final: "Com informações oficiais da Caixa Econômica Federal".
+
+2. REGRAS DE SEO ON-PAGE E WEBWRITING
+- Palavra-chave foco no título, primeiro parágrafo e subtítulo H2 (ex: "Resultado da ${nomeLoteria} Concurso ${concurso}").
+- Parágrafos curtos (máximo 3 a 4 linhas).
+- Bullet points destacando as dezenas e os valores.
+
+3. O DNA ANTIDETECÇÃO
+- Proibido o uso de travessões ou hífens (-, —, –) para separar orações.
+- Sem clichês de IA ("Além disso", "Ademais", "Em suma").
+
+4. FORMATO DE SAÍDA EXIGIDO (JSON ESTRITO):
+{
+  "title": "Manchete jornalística, curta, chamativa e com a palavra-chave",
+  "seo_title": "Título otimizado para o Google com no máximo 60 caracteres",
+  "slug": "resultado-${modality.caixaKey}-concurso-${concurso}",
+  "meta_description": "Confira o resultado do concurso ${concurso} da ${nomeLoteria} de ${dataSorteio}. Dezenas sorteadas e valor do próximo prêmio.",
+  "excerpt": "Lide jornalístico resumindo o resultado do sorteio e o valor acumulado",
+  "content": "Texto completo em Markdown com H2, listas e citações",
+  "tags": ["${modality.caixaKey}", "loterias", "resultado", "sorteio", "economia"]
+}`
 
     const userPrompt = `DADOS OFICIAIS DO SORTEIO:
 Modalidade: ${nomeLoteria}
@@ -134,13 +151,7 @@ Dezenas Sorteadas: ${dezenas}
 Status do Prêmio: ${acumulou}
 Estimativa Próximo Concurso: ${premioEstimado}
 
-Retorne estritamente um JSON no formato:
-{
-  "title": "Manchete jornalística (máx 90 caracteres)",
-  "excerpt": "Linha fina resumindo as dezenas e o prêmio (máx 160 caracteres)",
-  "content": "Reportagem completa em Markdown com subtítulos H2 e sem travessões (máximo 250 palavras).",
-  "tags": ["${modality.caixaKey}", "loterias", "resultado", "economia"]
-}`
+Gere o artigo em JSON estrito seguindo todas as regras do Redator Chefe.`
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -174,9 +185,8 @@ Retorne estritamente um JSON no formato:
     const articleData = JSON.parse(contentText)
 
     // 5. Save to Supabase if configured
-    if (SUPABASE_URL && SUPABASE_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-      
+    const supabase = getPublicSupabaseClient()
+    if (supabase) {
       const { data: catData } = await supabase
         .from('categories')
         .select('id')
@@ -189,9 +199,12 @@ Retorne estritamente um JSON no formato:
       const postPayload: Record<string, any> = {
         id: postId,
         title: articleData.title,
+        seo_title: articleData.seo_title || articleData.title,
+        slug: articleData.slug || `resultado-${modality.caixaKey}-${concurso}`,
+        meta_description: articleData.meta_description || articleData.excerpt || articleData.title,
         excerpt: articleData.excerpt,
         content: articleData.content,
-        author: 'Redação Tagma',
+        author: 'Loterias Tagma',
         published: true,
         tags: articleData.tags || ['loterias', modality.caixaKey]
       }
@@ -200,10 +213,21 @@ Retorne estritamente um JSON no formato:
         postPayload.category_id = catId
       }
 
-      const { error: insertError } = await supabase.from('posts').insert(postPayload)
-
-      if (insertError) {
-        console.warn('Supabase insert warning for lottery:', insertError.message || insertError)
+      let insertResult = await supabase.from('posts').insert(postPayload)
+      
+      // Fallback se colunas extras não existirem
+      if (insertResult.error && (insertResult.error.message.includes('column') || insertResult.error.details?.includes('column'))) {
+        const safePayload = {
+          id: postId,
+          title: articleData.title,
+          excerpt: articleData.excerpt,
+          content: articleData.content,
+          category_id: catId || undefined,
+          author: 'Loterias Tagma',
+          published: true,
+          tags: articleData.tags || ['loterias', modality.caixaKey]
+        }
+        await supabase.from('posts').insert(safePayload)
       }
     }
 
