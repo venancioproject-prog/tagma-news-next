@@ -192,7 +192,7 @@ export default function AdminPage() {
             <div className="mt-8 pt-5 border-t border-gray-200 text-xs text-gray-500 space-y-2">
               <div className="flex justify-between items-center">
                 <span>Motor IA:</span>
-                <strong className="text-gray-800 font-mono text-[11px]">llama3-70b-8192</strong>
+                <strong className="text-gray-800 font-mono text-[11px]">llama-3.1-8b-instant</strong>
               </div>
               <div className="flex justify-between items-center">
                 <span>Fontes:</span>
@@ -203,6 +203,7 @@ export default function AdminPage() {
                 <span className="text-emerald-700 font-bold font-mono text-[11px]">Serverless Pronto</span>
               </div>
             </div>
+
           </aside>
 
           {/* ÁREA CENTRAL DE TRABALHO (9 colunas) */}
