@@ -1,7 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import Image from 'next/image'
 
-export const revalidate = 0 // Disable static cache to immediately show new articles
+export const revalidate = 60
 
 interface ArticleItem {
   id: string
@@ -139,11 +140,14 @@ export default async function Home() {
           </p>
 
           {heroPost.image && (
-            <Link href={`/materia/${heroPost.id}`} className="block w-full aspect-[16/9] overflow-hidden rounded-sm bg-gray-100 mb-4 shadow-sm group">
-              <img 
+            <Link href={`/materia/${heroPost.id}`} className="relative block w-full aspect-[16/9] overflow-hidden rounded-sm bg-gray-100 mb-4 shadow-sm group">
+              <Image 
                 src={heroPost.image} 
                 alt={heroPost.title} 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                className="object-cover transition-transform duration-700 group-hover:scale-105" 
               />
             </Link>
           )}
@@ -169,7 +173,7 @@ export default async function Home() {
           </div>
 
           <div className="flex flex-col divide-y divide-gray-100">
-            {sidebarPosts.map((post, idx) => (
+            {sidebarPosts.map((post) => (
               <article key={post.id} className="py-4 first:pt-0 last:pb-0 group">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-[9px] font-sans font-bold uppercase tracking-wider text-[#d8561c]">
@@ -188,11 +192,13 @@ export default async function Home() {
                 </Link>
 
                 {post.image && (
-                  <Link href={`/materia/${post.id}`} className="mt-2.5 block aspect-[16/9] overflow-hidden rounded bg-gray-100">
-                    <img 
+                  <Link href={`/materia/${post.id}`} className="relative mt-2.5 block aspect-[16/9] overflow-hidden rounded bg-gray-100">
+                    <Image 
                       src={post.image} 
                       alt={post.title} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 33vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105" 
                     />
                   </Link>
                 )}
@@ -226,11 +232,13 @@ export default async function Home() {
             <article key={post.id} className="bg-white border border-gray-200 rounded p-4 flex flex-col justify-between group hover:shadow-md transition-shadow">
               <div>
                 {post.image && (
-                  <Link href={`/materia/${post.id}`} className="aspect-[16/10] overflow-hidden rounded bg-gray-100 mb-3 block">
-                    <img 
+                  <Link href={`/materia/${post.id}`} className="relative aspect-[16/10] overflow-hidden rounded bg-gray-100 mb-3 block">
+                    <Image 
                       src={post.image} 
                       alt={post.title} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105" 
                     />
                   </Link>
                 )}
@@ -255,4 +263,3 @@ export default async function Home() {
     </main>
   )
 }
-

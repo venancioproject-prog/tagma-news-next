@@ -1,5 +1,6 @@
 ﻿import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
@@ -124,8 +125,15 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
           </div>
 
           {post.image && (
-            <div className="w-full aspect-video overflow-hidden bg-gray-100 mb-8 rounded">
-              <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
+            <div className="relative w-full aspect-video overflow-hidden bg-gray-100 mb-8 rounded">
+              <Image 
+                src={post.image} 
+                alt={post.title} 
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                className="object-cover" 
+              />
             </div>
           )}
 
@@ -152,11 +160,13 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
                 <article key={item.id} className={`${index > 0 ? 'pt-4' : ''} group cursor-pointer`}>
                   <Link href={`/materia/${item.id}`} className="flex gap-3 items-start">
                     {item.image && (
-                      <div className="w-20 h-16 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
-                        <img 
+                      <div className="relative w-20 h-16 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
+                        <Image 
                           src={item.image} 
                           alt={item.title} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          fill
+                          sizes="80px"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300" 
                         />
                       </div>
                     )}

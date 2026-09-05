@@ -1,5 +1,6 @@
 ﻿import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import Image from 'next/image'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
 
 export const revalidate = 60
@@ -99,12 +100,19 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
         <p className="text-xl italic text-gray-500">Nenhuma matéria publicada nesta editoria ainda.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {articles.map(post => (
+          {articles.map((post, idx) => (
             <article key={post.id} className="group cursor-pointer flex flex-col justify-between border-b border-gray-100 pb-6 lg:border-none lg:pb-0">
               <div>
-                <Link href={`/materia/${post.id}`} className="aspect-[16/10] overflow-hidden bg-gray-100 mb-4 block rounded">
+                <Link href={`/materia/${post.id}`} className="relative aspect-[16/10] overflow-hidden bg-gray-100 mb-4 block rounded">
                   {post.image ? (
-                    <img src={post.image} alt={post.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                    <Image 
+                      src={post.image} 
+                      alt={post.title} 
+                      fill
+                      priority={idx < 3}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      className="object-cover transition-transform duration-700 group-hover:scale-105" 
+                    />
                   ) : (
                     <div className="w-full h-full bg-stone-100 flex items-center justify-center text-stone-400 font-sans text-xs uppercase font-bold tracking-widest">
                       Tagma News
