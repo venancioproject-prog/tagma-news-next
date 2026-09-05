@@ -1,12 +1,21 @@
-import { createServerClient } from '@supabase/ssr'
+﻿import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url) {
+    console.error('[CRÍTICO SUPABASE] NEXT_PUBLIC_SUPABASE_URL não configurada no servidor SSR.')
+  }
+  if (!key) {
+    console.error('[CRÍTICO SUPABASE] NEXT_PUBLIC_SUPABASE_ANON_KEY não configurada no servidor SSR.')
+  }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url || '',
+    key || '',
     {
       cookies: {
         getAll() {
@@ -18,9 +27,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            // Ignorado em Server Components
           }
         },
       },

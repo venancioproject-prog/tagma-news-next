@@ -1,4 +1,5 @@
 ﻿import { NextResponse } from 'next/server'
+import { getPublicSupabaseClient } from '@/lib/supabase/public'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
 
@@ -6,8 +7,12 @@ export async function POST(request: Request) {
   try {
     const { title, description, category, link, source } = await request.json()
 
-    if (!title) {
-      return NextResponse.json({ error: 'Faltam dados da pauta (título obrigatório)' }, { status: 400 })
+    if (!title || !title.trim()) {
+      return NextResponse.json({ error: 'Faltam dados da pauta (título obrigatório).' }, { status: 400 })
+    }
+
+    if (!GROQ_API_KEY) {
+      return NextResponse.json({ error: 'Chave GROQ_API_KEY não configurada no servidor.' }, { status: 500 })
     }
 
     const currentCategory = category || 'Geral'
@@ -61,7 +66,7 @@ Gere o artigo em JSON com o formato estrito:
 
     if (!groqResponse.ok) {
       const errorText = await groqResponse.text()
-      throw new Error(`Groq API Error (${groqResponse.status}): ${errorText}`)
+      throw new Error(`Erro na API Groq (${groqResponse.status}): ${errorText}`)
     }
 
     const groqData = await groqResponse.json()
@@ -74,10 +79,9 @@ Gere o artigo em JSON com o formato estrito:
     const articleData = JSON.parse(contentText)
 
     if (!articleData.title || !articleData.content) {
-      throw new Error('JSON retornado pela IA não contém os campos obrigatórios')
+      throw new Error('JSON retornado pela IA não contém os campos obrigatórios (title / content).')
     }
 
-    // Retorna o rascunho para revisão e apuração do jornalista antes de publicar no banco
     return NextResponse.json({ 
       success: true, 
       draft: {
@@ -90,7 +94,9 @@ Gere o artigo em JSON com o formato estrito:
     })
 
   } catch (err: any) {
-    console.error('Draft API Error:', err)
-    return NextResponse.json({ error: err.message || 'Erro interno ao gerar matéria' }, { status: 500 })
+    console.error('[ERRO API DRAFT]:', err)
+    return NextResponse.json({ 
+      error: `Falha ao redigir matéria: ${err.message || 'Erro interno no processamento'}` 
+    }, { status: 500 })
   }
 }
