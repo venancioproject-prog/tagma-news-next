@@ -1,4 +1,4 @@
-﻿import { getPublicSupabaseClient } from '@/lib/supabase/public'
+import { getPublicSupabaseClient } from '@/lib/supabase/public'
 import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
@@ -240,12 +240,45 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          {/* Renderizador com react-markdown, remarkGfm e @tailwindcss/typography */}
-          <div className="prose prose-lg prose-green max-w-none text-[#1c1b1b] leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {post.content}
-            </ReactMarkdown>
-          </div>
+          {/* Renderizador com react-markdown, remarkGfm, quebras sanitizadas e fallback customizado */}
+          {(() => {
+            const formattedContent = post.content ? post.content.replace(/\\n/g, '\n') : '';
+            return (
+              <div className="prose prose-lg prose-green max-w-none text-[#1c1b1b] leading-relaxed">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h2: ({ node, ...props }) => (
+                      <h2 className="text-2xl font-bold mt-8 mb-4 text-[#001c06] font-sans" {...props} />
+                    ),
+                    h3: ({ node, ...props }) => (
+                      <h3 className="text-xl font-bold mt-6 mb-3 text-[#001c06] font-sans" {...props} />
+                    ),
+                    p: ({ node, ...props }) => (
+                      <p className="mb-6 leading-relaxed" {...props} />
+                    ),
+                    ul: ({ node, ...props }) => (
+                      <ul className="list-disc list-inside space-y-2 my-4 pl-2" {...props} />
+                    ),
+                    ol: ({ node, ...props }) => (
+                      <ol className="list-decimal list-inside space-y-2 my-4 pl-2" {...props} />
+                    ),
+                    li: ({ node, ...props }) => (
+                      <li className="leading-relaxed" {...props} />
+                    ),
+                    blockquote: ({ node, ...props }) => (
+                      <blockquote className="border-l-4 border-[#003311] pl-4 italic my-4 text-[#414940] bg-[#f6f3f2] p-3 rounded-r" {...props} />
+                    ),
+                    strong: ({ node, ...props }) => (
+                      <strong className="font-bold text-[#001c06]" {...props} />
+                    )
+                  }}
+                >
+                  {formattedContent}
+                </ReactMarkdown>
+              </div>
+            )
+          })()}
         </main>
 
         {/* Coluna Lateral de Retenção (Direita - 30% / lg:col-span-4) */}
