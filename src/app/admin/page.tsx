@@ -192,7 +192,7 @@ export default function AdminPage() {
             <div className="mt-8 pt-5 border-t border-gray-200 text-xs text-gray-500 space-y-2">
               <div className="flex justify-between items-center">
                 <span>Motor IA:</span>
-                <strong className="text-gray-800 font-mono text-[11px]">llama-3.1-8b-instant</strong>
+                <strong className="text-gray-800 font-mono text-[11px]">openai/gpt-oss-120b</strong>
               </div>
               <div className="flex justify-between items-center">
                 <span>Fontes:</span>
@@ -200,9 +200,10 @@ export default function AdminPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span>Status:</span>
-                <span className="text-emerald-700 font-bold font-mono text-[11px]">Serverless Pronto</span>
+                <span className="text-emerald-700 font-bold font-mono text-[11px]">Serverless Ativo</span>
               </div>
             </div>
+
 
           </aside>
 

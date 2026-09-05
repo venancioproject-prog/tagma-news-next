@@ -149,7 +149,7 @@ Retorne estritamente um JSON no formato:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL_NAME || 'llama-3.1-8b-instant',
+        model: process.env.GROQ_MODEL_NAME || 'openai/gpt-oss-120b',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
