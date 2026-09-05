@@ -1,9 +1,6 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+﻿import { NextResponse } from 'next/server'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +38,7 @@ Gere o artigo em JSON com o formato estrito:
   "title": "Manchete jornalística",
   "excerpt": "Linha fina resumindo o fato",
   "content": "Texto completo em Markdown (com H2 e sem travessões)",
+  "category": "${currentCategory}",
   "tags": ["tag1", "tag2", "tag3"]
 }`
 
@@ -79,41 +77,20 @@ Gere o artigo em JSON com o formato estrito:
       throw new Error('JSON retornado pela IA não contém os campos obrigatórios')
     }
 
-    // Save to Supabase if configured
-    if (SUPABASE_URL && SUPABASE_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-      
-      // Get category ID
-      const { data: catData } = await supabase
-        .from('categories')
-        .select('id')
-        .ilike('name', currentCategory)
-        .single()
-
-      const catId = catData?.id || null
-      const postId = `post-${Date.now()}`
-
-      const { error: insertError } = await supabase.from('posts').insert({
-        id: postId,
+    // Retorna o rascunho para revisão e apuração do jornalista antes de publicar no banco
+    return NextResponse.json({ 
+      success: true, 
+      draft: {
         title: articleData.title,
         excerpt: articleData.excerpt || articleData.title,
         content: articleData.content,
-        category_id: catId,
-        author: 'Redação Tagma',
-        published: true,
+        category: articleData.category || currentCategory,
         tags: Array.isArray(articleData.tags) ? articleData.tags : [currentCategory.toLowerCase()]
-      })
-
-      if (insertError) {
-        console.warn('Supabase insert warning:', insertError)
       }
-    }
-
-    return NextResponse.json({ success: true, post: articleData })
+    })
 
   } catch (err: any) {
     console.error('Draft API Error:', err)
     return NextResponse.json({ error: err.message || 'Erro interno ao gerar matéria' }, { status: 500 })
   }
 }
-

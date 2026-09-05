@@ -33,6 +33,18 @@ export default function AdminPage() {
   const [manualDrafting, setManualDrafting] = useState(false);
   const [manualPublished, setManualPublished] = useState<string | null>(null);
 
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [currentDraft, setCurrentDraft] = useState<{
+    title: string;
+    excerpt: string;
+    content: string;
+    category: string;
+    image?: string;
+    tags?: string[];
+    sourceIndex?: number;
+  } | null>(null);
+  const [publishingDraft, setPublishingDraft] = useState(false);
+
   const fetchPautas = async () => {
     setLoadingPautas(true);
     try {
@@ -62,8 +74,17 @@ export default function AdminPage() {
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setPublishedPautas(prev => ({ ...prev, [index]: data.post.title }));
+      if (data.success && data.draft) {
+        setCurrentDraft({
+          title: data.draft.title,
+          excerpt: data.draft.excerpt,
+          content: data.draft.content,
+          category: data.draft.category || category,
+          image: '',
+          tags: data.draft.tags || [category.toLowerCase()],
+          sourceIndex: index
+        });
+        setReviewModalOpen(true);
       } else {
         alert(`Erro: ${data.error || 'Falha ao redigir notícia'}`);
       }
@@ -71,6 +92,43 @@ export default function AdminPage() {
       alert('Erro na conexão com a API de Redação.');
     } finally {
       setDraftingMap(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handlePublishReviewedDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentDraft) return;
+
+    setPublishingDraft(true);
+    try {
+      const res = await fetch('/api/draft/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: currentDraft.title,
+          excerpt: currentDraft.excerpt,
+          image: currentDraft.image,
+          content: currentDraft.content,
+          category: currentDraft.category,
+          tags: currentDraft.tags
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        if (currentDraft.sourceIndex !== undefined) {
+          setPublishedPautas(prev => ({ ...prev, [currentDraft.sourceIndex!]: currentDraft.title }));
+        }
+        setReviewModalOpen(false);
+        setCurrentDraft(null);
+        alert('✓ Matéria apurada e publicada com sucesso no portal!');
+      } else {
+        alert(`Erro ao publicar: ${data.error}`);
+      }
+    } catch (err) {
+      alert('Erro ao enviar matéria para publicação.');
+    } finally {
+      setPublishingDraft(false);
     }
   };
 
@@ -315,10 +373,10 @@ export default function AdminPage() {
                                   {isDrafting ? (
                                     <>
                                       <span className="inline-block animate-spin text-orange-400 font-bold">⟳</span>
-                                      <span className="text-orange-300 font-bold">Redigindo Matéria...</span>
+                                      <span className="text-orange-300 font-bold">Redigindo com IA...</span>
                                     </>
                                   ) : (
-                                    '2. Redigir e Publicar (IA)'
+                                    '2. Redigir com IA →'
                                   )}
                                 </button>
                               )}
@@ -503,7 +561,7 @@ export default function AdminPage() {
                       'Publicar Matéria Imediatamente'
                     )}
                   </button>
-                </form>
+                  </form>
               </div>
             )}
 
@@ -511,6 +569,136 @@ export default function AdminPage() {
         </div>
 
       </div>
+
+      {/* MODAL DE APURAÇÃO E REVISÃO EDITORIAL DA IA */}
+      {reviewModalOpen && currentDraft && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-gray-200">
+            
+            {/* Modal Header */}
+            <div className="bg-[#003311] text-white px-6 py-4 flex items-center justify-between border-b-2 border-[#d8561c]">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🔍</span>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider">
+                    Apuração & Revisão Editorial
+                  </h3>
+                  <p className="text-[11px] text-white/70">
+                    Verifique os fatos apurados pela IA, faça edições e valide o texto antes de publicar.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setReviewModalOpen(false)}
+                className="text-white/70 hover:text-white text-xl font-bold p-1 leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handlePublishReviewedDraft} className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    Título / Manchete
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={currentDraft.title}
+                    onChange={e => setCurrentDraft({ ...currentDraft, title: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm font-bold text-gray-900 focus:outline-none focus:border-[#003311]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    Editoria
+                  </label>
+                  <select
+                    value={currentDraft.category}
+                    onChange={e => setCurrentDraft({ ...currentDraft, category: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm font-semibold bg-white focus:outline-none focus:border-[#003311]"
+                  >
+                    <option>Política</option>
+                    <option>Economia</option>
+                    <option>Internacional</option>
+                    <option>Cultura</option>
+                    <option>Esportes</option>
+                    <option>Tecnologia</option>
+                    <option>Geral</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  Linha Fina / Resumo da Matéria
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={currentDraft.excerpt}
+                  onChange={e => setCurrentDraft({ ...currentDraft, excerpt: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:border-[#003311]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  URL da Imagem de Destaque (Opcional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://exemplo.com/foto.jpg"
+                  value={currentDraft.image || ''}
+                  onChange={e => setCurrentDraft({ ...currentDraft, image: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-[#003311]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  Texto Completo da Matéria (Markdown)
+                </label>
+                <textarea
+                  required
+                  rows={10}
+                  value={currentDraft.content}
+                  onChange={e => setCurrentDraft({ ...currentDraft, content: e.target.value })}
+                  className="w-full border border-gray-300 rounded p-3 font-mono text-sm leading-relaxed text-gray-800 focus:outline-none focus:border-[#003311]"
+                ></textarea>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOpen(false)}
+                  className="px-5 py-2.5 rounded border border-gray-300 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  Descartar / Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={publishingDraft}
+                  className="px-6 py-2.5 rounded bg-[#003311] hover:bg-[#001c06] text-white text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {publishingDraft ? (
+                    <>
+                      <span className="inline-block animate-spin">⟳</span>
+                      <span>Publicando Matéria...</span>
+                    </>
+                  ) : (
+                    '✓ Confirmar Apuração & Publicar no Portal'
+                  )}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
