@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
@@ -181,24 +181,29 @@ Retorne estritamente um JSON no formato:
         .from('categories')
         .select('id')
         .ilike('name', 'Economia')
-        .single()
+        .maybeSingle()
 
       const catId = catData?.id || null
       const postId = `loteria-${modality.caixaKey}-${concurso}-${Date.now()}`
 
-      const { error: insertError } = await supabase.from('posts').insert({
+      const postPayload: Record<string, any> = {
         id: postId,
         title: articleData.title,
         excerpt: articleData.excerpt,
         content: articleData.content,
-        category_id: catId,
         author: 'Redação Tagma',
         published: true,
         tags: articleData.tags || ['loterias', modality.caixaKey]
-      })
+      }
+
+      if (catId) {
+        postPayload.category_id = catId
+      }
+
+      const { error: insertError } = await supabase.from('posts').insert(postPayload)
 
       if (insertError) {
-        console.warn('Supabase insert warning:', insertError)
+        console.warn('Supabase insert warning for lottery:', insertError.message || insertError)
       }
     }
 
@@ -214,4 +219,3 @@ Retorne estritamente um JSON no formato:
     return NextResponse.json({ error: err.message || 'Erro interno ao apurar loteria' }, { status: 500 })
   }
 }
-

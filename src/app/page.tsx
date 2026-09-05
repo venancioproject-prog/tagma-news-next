@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+﻿import { getPublicSupabaseClient } from '@/lib/supabase/public'
 import Link from 'next/link'
 import Image from 'next/image'
 import AdSlot from '@/components/AdSlot'
@@ -10,38 +10,40 @@ export default async function Home() {
   let dbArticles: ArticleItem[] = []
 
   try {
-    const supabase = await createClient()
-    const { data: posts, error } = await supabase
-      .from('posts')
-      .select(`
-        id,
-        title,
-        excerpt,
-        content,
-        image,
-        author,
-        created_at,
-        categories (
-          name
-        )
-      `)
-      .eq('published', true)
-      .order('created_at', { ascending: false })
+    const supabase = getPublicSupabaseClient()
+    if (supabase) {
+      const { data: posts, error } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          excerpt,
+          content,
+          image,
+          author,
+          created_at,
+          categories (
+            name
+          )
+        `)
+        .eq('published', true)
+        .order('created_at', { ascending: false })
 
-    if (error) {
-      console.warn('Supabase fetch error, fallback to mock data:', error.message)
-    } else if (posts && posts.length > 0) {
-      dbArticles = posts.map((p: any) => ({
-        id: p.id,
-        title: p.title,
-        excerpt: p.excerpt || '',
-        content: p.content || '',
-        image: p.image || null,
-        author: p.author || 'Redação Tagma',
-        created_at: p.created_at,
-        category_name: p.categories?.name || 'Geral',
-        tags: []
-      }))
+      if (error) {
+        console.warn('Supabase fetch error, fallback to mock data:', error.message)
+      } else if (posts && posts.length > 0) {
+        dbArticles = posts.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          excerpt: p.excerpt || '',
+          content: p.content || '',
+          image: p.image || null,
+          author: p.author || 'Redação Tagma',
+          created_at: p.created_at,
+          category_name: p.categories?.name || 'Geral',
+          tags: []
+        }))
+      }
     }
   } catch (err) {
     console.warn('Could not connect to Supabase, injecting mock posts:', err)

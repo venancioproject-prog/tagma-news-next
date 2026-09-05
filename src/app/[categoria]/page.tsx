@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+﻿import { getPublicSupabaseClient } from '@/lib/supabase/public'
 import Link from 'next/link'
 import Image from 'next/image'
 import { MOCK_POSTS, ArticleItem } from '@/lib/posts-data'
@@ -32,43 +32,45 @@ export default async function CategoriaPage({ params }: { params: Promise<{ cate
   let articles: ArticleItem[] = []
 
   try {
-    const supabase = await createClient()
-    const { data: catData } = await supabase
-      .from('categories')
-      .select('*')
-      .ilike('name', categoryDisplayName)
-      .single()
+    const supabase = getPublicSupabaseClient()
+    if (supabase) {
+      const { data: catData } = await supabase
+        .from('categories')
+        .select('*')
+        .ilike('name', categoryDisplayName)
+        .maybeSingle()
 
-    if (catData?.id) {
-      const { data: posts } = await supabase
-        .from('posts')
-        .select(`
-          id,
-          title,
-          excerpt,
-          content,
-          image,
-          author,
-          created_at,
-          categories (
-            name
-          )
-        `)
-        .eq('category_id', catData.id)
-        .eq('published', true)
-        .order('created_at', { ascending: false })
+      if (catData?.id) {
+        const { data: posts } = await supabase
+          .from('posts')
+          .select(`
+            id,
+            title,
+            excerpt,
+            content,
+            image,
+            author,
+            created_at,
+            categories (
+              name
+            )
+          `)
+          .eq('category_id', catData.id)
+          .eq('published', true)
+          .order('created_at', { ascending: false })
 
-      if (posts && posts.length > 0) {
-        articles = posts.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-          excerpt: p.excerpt || '',
-          content: p.content || '',
-          image: p.image || null,
-          author: p.author || 'Redação Tagma',
-          created_at: p.created_at,
-          category_name: p.categories?.name || categoryDisplayName
-        }))
+        if (posts && posts.length > 0) {
+          articles = posts.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            excerpt: p.excerpt || '',
+            content: p.content || '',
+            image: p.image || null,
+            author: p.author || 'Redação Tagma',
+            created_at: p.created_at,
+            category_name: p.categories?.name || categoryDisplayName
+          }))
+        }
       }
     }
   } catch (err) {

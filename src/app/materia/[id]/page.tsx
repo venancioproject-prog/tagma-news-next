@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+﻿import { getPublicSupabaseClient } from '@/lib/supabase/public'
 import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
@@ -11,70 +11,71 @@ export default async function MateriaPage({ params }: { params: Promise<{ id: st
   let latestPosts: ArticleItem[] = []
 
   try {
-    const supabase = await createClient()
+    const supabase = getPublicSupabaseClient()
+    if (supabase) {
+      // 1. Busca a matéria atual no Supabase
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          excerpt,
+          content,
+          image,
+          author,
+          created_at,
+          categories (
+            name
+          )
+        `)
+        .eq('id', id)
+        .maybeSingle()
 
-    // 1. Busca a matéria atual no Supabase
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        id,
-        title,
-        excerpt,
-        content,
-        image,
-        author,
-        created_at,
-        categories (
-          name
-        )
-      `)
-      .eq('id', id)
-      .single()
-
-    if (data && !error) {
-      post = {
-        id: data.id,
-        title: data.title,
-        excerpt: data.excerpt || '',
-        content: data.content || '',
-        image: data.image || null,
-        author: data.author || 'Redação Tagma',
-        created_at: data.created_at,
-        category_name: (data as any).categories?.name || 'Geral'
+      if (data && !error) {
+        post = {
+          id: data.id,
+          title: data.title,
+          excerpt: data.excerpt || '',
+          content: data.content || '',
+          image: data.image || null,
+          author: data.author || 'Redação Tagma',
+          created_at: data.created_at,
+          category_name: (data as any).categories?.name || 'Geral'
+        }
       }
-    }
 
-    // 2. Busca as últimas matérias para a Sidebar (excluindo a atual)
-    const { data: recentData } = await supabase
-      .from('posts')
-      .select(`
-        id,
-        title,
-        excerpt,
-        content,
-        image,
-        author,
-        created_at,
-        categories (
-          name
-        )
-      `)
-      .neq('id', id)
-      .eq('published', true)
-      .order('created_at', { ascending: false })
-      .limit(5)
+      // 2. Busca as últimas matérias para a Sidebar (excluindo a atual)
+      const { data: recentData } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          excerpt,
+          content,
+          image,
+          author,
+          created_at,
+          categories (
+            name
+          )
+        `)
+        .neq('id', id)
+        .eq('published', true)
+        .order('created_at', { ascending: false })
+        .limit(5)
 
-    if (recentData && recentData.length > 0) {
-      latestPosts = recentData.map((p: any) => ({
-        id: p.id,
-        title: p.title,
-        excerpt: p.excerpt || '',
-        content: p.content || '',
-        image: p.image || null,
-        author: p.author || 'Redação Tagma',
-        created_at: p.created_at,
-        category_name: p.categories?.name || 'Geral'
-      }))
+      if (recentData && recentData.length > 0) {
+        latestPosts = recentData.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          excerpt: p.excerpt || '',
+          content: p.content || '',
+          image: p.image || null,
+          author: p.author || 'Redação Tagma',
+          created_at: p.created_at,
+          category_name: p.categories?.name || 'Geral'
+        }))
+      }
     }
   } catch (err) {
     console.error('Erro ao buscar dados da matéria no Supabase:', err)
