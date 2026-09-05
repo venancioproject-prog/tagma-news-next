@@ -1,8 +1,8 @@
-﻿import { MetadataRoute } from 'next'
-import { getPublicSupabaseClient } from '@/lib/supabase/public'
-import { MOCK_POSTS } from '@/lib/posts-data'
+import { MetadataRoute } from 'next';
+import { getPublicSupabaseClient } from '@/lib/supabase/public';
+import { MOCK_POSTS } from '@/lib/posts-data';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://tagmanews.vercel.app'
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://tagmanews.vercel.app';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes = [
@@ -13,6 +13,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/esportes',
     '/cultura',
     '/tecnologia',
+    '/ultimas',
+    '/ao-vivo',
+    '/videos',
+    '/audios',
+    '/newsletter',
     '/sobre',
     '/privacidade',
     '/termos',
@@ -20,21 +25,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ].map((route) => ({
     url: `${siteUrl}${route}`,
     lastModified: new Date().toISOString(),
-    changeFrequency: 'daily' as const,
+    changeFrequency: (route === '' || route === '/ultimas' || route === '/ao-vivo') ? ('hourly' as const) : ('daily' as const),
     priority: route === '' ? 1.0 : 0.8,
-  }))
+  }));
 
-  let postsUrls: MetadataRoute.Sitemap = []
+  let postsUrls: MetadataRoute.Sitemap = [];
 
   try {
-    const supabase = getPublicSupabaseClient()
+    const supabase = getPublicSupabaseClient();
     if (supabase) {
       const { data: posts } = await supabase
         .from('posts')
         .select('id, created_at')
         .eq('published', true)
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(100);
 
       if (posts && posts.length > 0) {
         postsUrls = posts.map((post: any) => ({
@@ -42,22 +47,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           lastModified: post.created_at || new Date().toISOString(),
           changeFrequency: 'weekly' as const,
           priority: 0.7,
-        }))
+        }));
       }
     }
-  } catch (err) {
-    console.error('Error fetching posts for sitemap:', err)
+  } catch {
+    // Fallback
   }
 
-  // Se não houver posts no banco, adiciona as matérias mock
   if (postsUrls.length === 0) {
     postsUrls = MOCK_POSTS.map((post) => ({
       url: `${siteUrl}/materia/${post.id}`,
       lastModified: post.created_at,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
-    }))
+    }));
   }
 
-  return [...routes, ...postsUrls]
+  return [...routes, ...postsUrls];
 }
