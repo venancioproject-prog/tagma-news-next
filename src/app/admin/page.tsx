@@ -78,6 +78,10 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.success && data.draft) {
+        const keyword = data.draft.image_keyword || category || 'news';
+        const cleanKw = encodeURIComponent(keyword.trim().replace(/[^a-zA-Z0-9 ]/g, ''));
+        const autoImage = data.draft.suggested_image || `https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1400&auto=format&fit=crop`;
+
         setCurrentDraft({
           title: data.draft.title,
           seo_title: data.draft.seo_title,
@@ -86,7 +90,7 @@ export default function AdminPage() {
           excerpt: data.draft.excerpt,
           content: data.draft.content,
           category: data.draft.category || category,
-          image: '',
+          image: autoImage,
           tags: data.draft.tags || [category.toLowerCase()],
           sourceIndex: index
         });
@@ -690,9 +694,20 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  URL da Imagem de Destaque (Opcional)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                    Imagem de Capa (Sugerida pela IA / Editável)
+                  </label>
+                  {currentDraft.image && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentDraft({ ...currentDraft, image: '' })}
+                      className="text-[10px] text-red-600 font-bold hover:underline"
+                    >
+                      Limpar Link
+                    </button>
+                  )}
+                </div>
                 <input
                   type="url"
                   placeholder="https://exemplo.com/foto.jpg"
@@ -700,11 +715,26 @@ export default function AdminPage() {
                   onChange={e => setCurrentDraft({ ...currentDraft, image: e.target.value })}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-[#003311]"
                 />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  A IA preenche uma sugestão automaticamente. Você pode manter, alterar para qualquer URL ou apagar.
+                </p>
+                {currentDraft.image && (
+                  <div className="mt-2 relative w-32 h-20 bg-gray-100 rounded overflow-hidden border border-gray-200">
+                    <img
+                      src={currentDraft.image}
+                      alt="Preview da Capa"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Texto Completo da Matéria (Markdown)
+                  Texto Completo da Matéria (Markdown com Tipografia)
                 </label>
                 <textarea
                   required

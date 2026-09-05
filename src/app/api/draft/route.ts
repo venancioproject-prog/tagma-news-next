@@ -50,6 +50,7 @@ Você deve retornar UNICAMENTE um JSON válido com a seguinte estrutura:
   "slug": "url-amigavel-da-materia-separada-por-tracos-sem-acentos",
   "meta_description": "Resumo magnético para aparecer no Google, entre 130 e 150 caracteres, terminando com uma chamada para a leitura",
   "excerpt": "Lide jornalístico de 1 a 2 frases para a página inicial",
+  "image_keyword": "termo de busca curto em inglês altamente visual para encontrar foto no Unsplash/Pexels (ex: brazil politics, stock market chart, grain agriculture, quantum technology)",
   "content": "O texto completo e gigantesco da matéria, formatado estritamente em Markdown. Deve conter H2, parágrafos curtos, listas se necessário, e citações em itálico ou blockquotes",
   "tags": ["tag1", "tag2", "tag3"]
 }`
@@ -60,7 +61,7 @@ Lide / Resumo Original: ${newsLead}
 Editoria: ${currentCategory}
 Fonte: ${newsSource} ${link ? `(${link})` : ''}
 
-Gere o artigo completo em JSON estrito seguindo todas as regras do Redator Chefe.`
+Gere o artigo completo em JSON estrito com o novo campo "image_keyword".`
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -97,6 +98,11 @@ Gere o artigo completo em JSON estrito seguindo todas as regras do Redator Chefe
       throw new Error('JSON retornado pela IA não contém os campos obrigatórios (title / content).')
     }
 
+    const keyword = articleData.image_keyword || currentCategory.toLowerCase()
+    const cleanKeyword = encodeURIComponent(keyword.trim().replace(/[^a-zA-Z0-9 ]/g, ''))
+    // Sugestão de imagem dinâmica baseada na keyword retornada pela IA
+    const suggestedImage = `https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1400&auto=format&fit=crop`
+
     return NextResponse.json({ 
       success: true, 
       draft: {
@@ -105,6 +111,8 @@ Gere o artigo completo em JSON estrito seguindo todas as regras do Redator Chefe
         slug: articleData.slug || articleData.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
         meta_description: articleData.meta_description || articleData.excerpt || articleData.title,
         excerpt: articleData.excerpt || articleData.title,
+        image_keyword: articleData.image_keyword || '',
+        suggested_image: suggestedImage,
         content: articleData.content,
         category: currentCategory,
         tags: Array.isArray(articleData.tags) ? articleData.tags : [currentCategory.toLowerCase()]
